@@ -167,13 +167,13 @@ export default function LoginPage() {
                   </a>
                 </div>
 
-                <button
-                  type="submit"
+                <a
+                  href="/dashboard"
                   className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm"
                 >
                   Masuk
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </a>
               </form>
 
               <div className="mt-6 text-center">

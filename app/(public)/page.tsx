@@ -45,9 +45,9 @@ const features = [
 
 const stats = [
   { label: "Desa Terdaftar", value: "12", icon: Users, color: "text-primary" },
-  { label: "Suara Terkumpul", value: "15.420", icon: Vote, color: "text-primary-light" },
-  { label: "Aspirasi Masuk", value: "3.892", icon: MessageSquare, color: "text-primary" },
-  { label: "Tingkat Partisipasi", value: "87,3%", icon: BarChart3, color: "text-primary-light" },
+  { label: "Suara Terkumpul", value: "0", icon: Vote, color: "text-primary-light" },
+  { label: "Aspirasi Masuk", value: "0", icon: MessageSquare, color: "text-primary" },
+  { label: "Tingkat Partisipasi", value: "0%", icon: BarChart3, color: "text-primary-light" },
 ];
 
 const desaBalikpapan = [
@@ -312,7 +312,7 @@ export default function Home() {
             <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-bold text-foreground">Suara Terkumpul</h3>
-                <p className="text-sm text-muted mt-1">Total 15.420 suara dari 12 desa</p>
+                <p className="text-sm text-muted mt-1">Total 0 suara dari 12 desa</p>
               </div>
               <button onClick={() => setActiveModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
                 <X className="w-5 h-5" />
@@ -346,7 +346,7 @@ export default function Home() {
             <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-bold text-foreground">Aspirasi Masuk</h3>
-                <p className="text-sm text-muted mt-1">Total 3.892 aspirasi dari warga</p>
+                <p className="text-sm text-muted mt-1">Total 0 aspirasi dari warga</p>
               </div>
               <button onClick={() => setActiveModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
                 <X className="w-5 h-5" />
@@ -391,7 +391,7 @@ export default function Home() {
             <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-bold text-foreground">Tingkat Partisipasi</h3>
-                <p className="text-sm text-muted mt-1">Rata-rata 87,3% partisipasi warga</p>
+                <p className="text-sm text-muted mt-1">Rata-rata 0% partisipasi warga</p>
               </div>
               <button onClick={() => setActiveModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
                 <X className="w-5 h-5" />
