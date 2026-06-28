@@ -1,3 +1,5 @@
+"use client";
+
 import {
   BookOpen,
   Vote,
@@ -13,6 +15,7 @@ import {
   Users,
   Scale,
 } from "lucide-react";
+import { useState } from "react";
 
 const articles = [
   {
@@ -23,6 +26,7 @@ const articles = [
     date: "25 Jun 2026",
     readTime: "5 menit",
     icon: Vote,
+    content: "E-voting atau pemungutan suara elektronik merupakan metode modern yang memberikan banyak keuntungan bagi demokrasi desa. Pertama, e-voting meningkatkan partisipasi warga karena prosesnya lebih mudah dan cepat. Kedua, hasil perhitungan suara dapat diketahui secara real-time sehingga transparansi terjamin. Ketiga, sistem enkripsi yang digunakan memastikan setiap suara tercatat dengan aman dan tidak dapat dimanipulasi. Dengan adanya e-voting, warga desa dapat menjalankan hak demokrasi mereka dengan lebih percaya diri tanpa khawatir terjadi kecurangan. Platform Azelina.id hadir sebagai solusi terpercaya untuk mewujudkan demokrasi desa yang jujur dan transparan.",
   },
   {
     id: 2,
@@ -32,6 +36,7 @@ const articles = [
     date: "23 Jun 2026",
     readTime: "7 menit",
     icon: AlertTriangle,
+    content: "Politik uang adalah praktik memberikan uang atau barang berharga kepada pemilih dengan tujuan mempengaruhi pilihan mereka. Praktik ini sangat merugikan demokrasi karena membuat pemilihan tidak lagi didasarkan pada visi dan program kandidat, melainkan pada materi. Akibatnya, kandidat terpilih belum tentu yang terbaik untuk masyarakat. Melawan politik uang membutuhkan kesadaran seluruh warga untuk menolak praktik tersebut dan melaporkannya. Platform Azelina.id menyediakan saluran pelaporan anonim yang aman sehingga warga dapat melaporkan praktik politik uang tanpa takut diintimidasi.",
   },
   {
     id: 3,
@@ -41,6 +46,7 @@ const articles = [
     date: "20 Jun 2026",
     readTime: "4 menit",
     icon: Scale,
+    content: "Setiap warga negara Indonesia memiliki hak-hak dasar dalam pemilihan umum yang dilindungi oleh undang-undang. Hak-hak tersebut meliputi: hak memilih secara bebas tanpa tekanan, hak untuk mencalonkan diri sebagai kandidat, hak mendapatkan informasi yang jelas tentang kandidat, hak merasa aman saat menggunakan hak pilih, hak kerahasiaan pilihan, dan hak mengajukan keberatan jika terjadi pelanggaran. Mengenal hak-hak ini sangat penting agar warga dapat berpartisipasi secara aktif dan bertanggung jawab dalam setiap proses pemilihan.",
   },
   {
     id: 4,
@@ -50,6 +56,7 @@ const articles = [
     date: "18 Jun 2026",
     readTime: "6 menit",
     icon: Shield,
+    content: "Enkripsi adalah teknologi keamanan yang mengubah data menjadi kode yang tidak dapat dibaca oleh pihak yang tidak berwenang. Dalam sistem e-voting, setiap suara yang diberikan oleh pemilih akan dienkripsi sebelum dikirim ke server. Proses ini memastikan bahwa tidak ada pihak yang dapat mengetahui pilihan pemilih, termasuk administrator sistem. Teknologi blockchain juga digunakan untuk mencatat setiap transaksi suara secara permanen dan tidak dapat diubah. Dengan kombinasi enkripsi dan blockchain, integritas dan kerahasiaan pemungutan suara dapat terjamin sepenuhnya.",
   },
   {
     id: 5,
@@ -59,6 +66,7 @@ const articles = [
     date: "15 Jun 2026",
     readTime: "5 menit",
     icon: Users,
+    content: "Partisipasi aktif warga merupakan fondasi utama demokrasi yang sehat. Partisipasi tidak hanya berarti hadir memberikan suara saat pemilihan, tetapi juga aktif dalam memberikan masukan, mengawasi jalannya pemerintahan, dan melaporkan segala bentuk pelanggaran. Di tingkat desa, partisipasi warga sangat penting karena langsung mempengaruhi kebijakan yang berdampak pada kehidupan sehari-hari. Melalui platform Azelina.id, warga dapat berpartisipasi dengan lebih mudah melalui e-voting dan saluran aspirasi anonim yang aman.",
   },
   {
     id: 6,
@@ -68,6 +76,7 @@ const articles = [
     date: "12 Jun 2026",
     readTime: "3 menit",
     icon: FileText,
+    content: "Surat suara digital dalam sistem e-voting dirancang untuk kemudahan penggunaan. Setiap pemilih akan melihat daftar kandidat lengkap dengan foto, nama, visi, misi, dan program kerja. Untuk memberikan suara, cukup klik pada kandidat pilihan Anda. Setelah memilih, sistem akan menampilkan konfirmasi untuk memastikan pilihan sudah benar. Setelah dikonfirmasi, suara Anda akan terenkripsi dan tidak dapat diubah. Fitur ini dirancang agar semua kalangan dapat dengan mudah menggunakan hak demokrasi mereka tanpa kendala teknis.",
   },
 ];
 
@@ -76,31 +85,37 @@ const voterRights = [
     title: "Hak Memilih",
     description: "Setiap warga yang telah memenuhi syarat memiliki hak untuk memilih secara bebas tanpa tekanan.",
     icon: Vote,
+    content: "Hak memilih adalah hak konstitusional setiap warga negara Indonesia yang telah memenuhi syarat. Hak ini menjamin bahwa setiap pemilih dapat menentukan pilihannya secara bebas, tanpa paksaan, ancaman, atau tekanan dari pihak manapun. Dalam pelaksanaannya, hak memilih harus dilakukan secara langsung, umum, bebas, rahasia, jujur, dan adil. Setiap warga berhak mendapatkan akses yang mudah untuk menggunakan hak pilihnya, termasuk melalui platform e-voting yang aman dan transparan.",
   },
   {
     title: "Hak Dipilih",
     description: "Setiap warga berhak untuk mencalonkan diri sebagai kandidat dalam pemilihan.",
     icon: User,
+    content: "Hak dipilih adalah hak setiap warga negara untuk mencalonkan diri sebagai kandidat dalam pemilihan umum. Hak ini merupakan bagian penting dari demokrasi karena memberikan kesempatan kepada semua warga untuk berkontribusi dalam pemerintahan. Untuk menggunakan hak ini, seseorang harus memenuhi syarat yang ditetapkan oleh undang-undang, termasuk batasan usia, kewarganegaraan, dan tidak sedang menjalani hukuman pidana. Melalui hak ini, setiap warga memiliki kesempatan yang sama untuk menjadi pemimpin di desanya.",
   },
   {
     title: "Hak Informasi",
     description: "Warga berhak mendapatkan informasi yang jelas dan lengkap tentang kandidat dan proses pemilihan.",
     icon: BookOpen,
+    content: "Hak informasi menjamin bahwa setiap warga berhak mendapatkan akses terhadap informasi yang akurat, jelas, dan lengkap mengenai seluruh aspek pemilihan. Ini termasuk informasi tentang profil kandidat, visi dan misi, program kerja, serta tata cara pemungutan suara. Hak ini sangat penting agar warga dapat membuat keputusan yang tepat dan terinformasi saat memberikan suara. Platform Azelina.id berkomitmen untuk menyediakan informasi yang transparan dan mudah diakses oleh seluruh warga.",
   },
   {
     title: "Hak Keamanan",
     description: "Warga berhak merasa aman saat menggunakan hak pilihnya tanpa ancaman atau kekerasan.",
     icon: Shield,
+    content: "Hak keamanan menjamin bahwa setiap warga dapat menjalankan hak demokrasinya dalam kondisi yang aman dan tanpa rasa takut. Hak ini melindungi warga dari segala bentuk ancaman, kekerasan, intimidasi, atau tindakan lain yang dapat mengganggu kebebasan dalam memberikan suara. Dalam platform e-voting, hak keamanan diwujudkan melalui sistem enkripsi yang melindungi identitas pemilih dan keamanan data yang ketat. Setiap laporan tentang ancaman atau kekerasan dapat disampaikan secara anonim melalui platform kami.",
   },
   {
     title: "Hak Kerahasiaan",
     description: "Pilihan warga harus dijaga kerahasiaannya. Tidak ada yang boleh mengetahui pilihan Anda.",
     icon: CheckCircle,
+    content: "Hak kerahasiaan menjamin bahwa pilihan setiap pemilih harus dijaga kerahasiaannya. Tidak ada pihak yang boleh mengetahui pilihan seseorang, baik sebelum, saat, maupun setelah pemungutan suara. Dalam sistem e-voting, hak kerahasiaan diwujudkan melalui teknologi zero-knowledge proof yang memisahkan identitas pemilih dari suara yang diberikan. Bahkan administrator platform tidak dapat mengetahui siapa yang memilih siapa. Hal ini memastikan bahwa setiap warga dapat memberikan suara dengan tenang dan jujur.",
   },
   {
     title: "Hak Keberatan",
     description: "Warga berhak mengajukan keberatan jika terjadi pelanggaran dalam proses pemilihan.",
     icon: Scale,
+    content: "Hak keberatan memberikan hak kepada setiap warga untuk menyampaikan keberatan jika mengetahui adanya pelanggaran dalam proses pemilihan. Keberatan ini dapat diajukan terkait berbagai hal seperti praktik politik uang, intimidasi terhadap pemilih, kecurangan dalam penghitungan suara, atau pelanggaran lainnya. Hak ini sangat penting untuk menjaga integritas dan kejujuran proses demokrasi. Melalui platform Azelina.id, warga dapat mengajukan keberatan secara anonim dan aman tanpa khawatir mengalami intimidasi.",
   },
 ];
 
@@ -176,6 +191,9 @@ const faqs = [
 ];
 
 export default function EdukasiPage() {
+  const [selectedArticle, setSelectedArticle] = useState<typeof articles[0] | null>(null);
+  const [selectedRight, setSelectedRight] = useState<typeof voterRights[0] | null>(null);
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -191,9 +209,8 @@ export default function EdukasiPage() {
               Waspada & Cerdas{" "}
               <span className="text-white/90">Berdemokrasi</span>
             </h2>
-            <p className="text-lg text-white/90 mb-8 max-w-xl leading-relaxed">
-              Pelajari hak Anda sebagai warga, cara kerja e-voting, dan bagaimana melawan politik uang untuk demokrasi desa
-              yang lebih baik.
+            <p className="text-lg text-white/90 mb-8 max-w-2xl leading-relaxed text-justify">
+              Demokrasi yang sehat berawal dari masyarakat yang cerdas, di sini anda dapat mempelajari dan memahami tata cara pelaporan dan e-voting yang aman, serta mengenali bahaya dari praktik politik uang untuk demokrasi desa yang lebih baik.
             </p>
           </div>
         </div>
@@ -247,6 +264,7 @@ export default function EdukasiPage() {
               <article
                 key={article.id}
                 className="group bg-white rounded-xl p-6 border border-border hover:border-accent hover:shadow-lg transition-all cursor-pointer"
+                onClick={() => setSelectedArticle(article)}
               >
                 <div className="w-12 h-12 rounded-xl bg-accent-light flex items-center justify-center mb-4">
                   <article.icon className="w-6 h-6 text-primary" />
@@ -289,13 +307,20 @@ export default function EdukasiPage() {
             {voterRights.map((right) => (
               <div
                 key={right.title}
-                className="bg-white rounded-xl p-6 border border-border hover:border-accent hover:shadow-lg transition-all"
+                className="group bg-white rounded-xl p-6 border border-border hover:border-accent hover:shadow-lg transition-all cursor-pointer"
+                onClick={() => setSelectedRight(right)}
               >
                 <div className="w-12 h-12 rounded-xl bg-accent-light flex items-center justify-center mb-4">
                   <right.icon className="w-6 h-6 text-primary" />
                 </div>
                 <h4 className="text-lg font-bold text-foreground mb-2">{right.title}</h4>
-                <p className="text-sm text-muted leading-relaxed">{right.description}</p>
+                <p className="text-sm text-muted leading-relaxed mb-4">{right.description}</p>
+                <div className="flex items-center justify-end">
+                  <span className="text-sm font-semibold text-muted group-hover:text-primary flex items-center gap-1 transition-colors">
+                    Baca
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -377,6 +402,66 @@ export default function EdukasiPage() {
           </div>
         </div>
       </section>
+      {/* Article Modal */}
+      {selectedArticle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSelectedArticle(null)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center">
+                    <selectedArticle.icon className="w-5 h-5 text-primary" />
+                  </div>
+                  <span className="text-xs px-2.5 py-0.5 bg-accent-light text-primary rounded-full font-medium">
+                    {selectedArticle.category}
+                  </span>
+                </div>
+                <button onClick={() => setSelectedArticle(null)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+                  <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-2">{selectedArticle.title}</h3>
+              <div className="flex items-center gap-4 text-xs text-muted mb-4">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {selectedArticle.readTime}
+                </span>
+                <span>{selectedArticle.date}</span>
+              </div>
+              <p className="text-muted leading-relaxed text-justify">{selectedArticle.content}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voter Rights Modal */}
+      {selectedRight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSelectedRight(null)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center">
+                    <selectedRight.icon className="w-5 h-5 text-primary" />
+                  </div>
+                  <span className="text-xs px-2.5 py-0.5 bg-accent-light text-primary rounded-full font-medium">
+                    Hak Konstitusional
+                  </span>
+                </div>
+                <button onClick={() => setSelectedRight(null)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+                  <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-2">{selectedRight.title}</h3>
+              <p className="text-muted leading-relaxed text-justify">{selectedRight.content}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
