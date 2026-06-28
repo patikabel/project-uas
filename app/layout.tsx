@@ -41,10 +41,10 @@ export default function RootLayout({
                 </div>
               </Link>
               <nav className="hidden md:flex items-center gap-8">
-                <Link href="/" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                <Link href="/" className="text-sm font-medium text-primary border border-yellow-400 rounded-full px-4 py-1.5 hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/30 transition-all">
                   Beranda
                 </Link>
-                <Link href="/edukasi" className="text-sm font-medium text-muted hover:text-primary transition-colors">
+                <Link href="/edukasi" className="text-sm font-medium text-primary border border-yellow-400 rounded-full px-4 py-1.5 hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/30 transition-all">
                   Edukasi Publik
                 </Link>
               </nav>
