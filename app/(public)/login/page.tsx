@@ -168,7 +168,7 @@ export default function LoginPage() {
                 </div>
 
                 <a
-                  href="/dashboard"
+                  href={activeTab === "admin" ? "/admin/dashboard" : "/dashboard"}
                   className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm"
                 >
                   Masuk

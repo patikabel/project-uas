@@ -222,28 +222,28 @@ export default function EdukasiPage() {
           <nav className="flex overflow-x-auto gap-2 py-3" aria-label="Edukasi">
             <a
               href="#artikel"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light border border-amber-300 hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
             >
               <BookOpen className="w-4 h-4" />
               Artikel
             </a>
             <a
               href="#hak-pilih"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light border border-amber-300 hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
             >
               <Shield className="w-4 h-4" />
               Hak Pilih Warga
             </a>
             <a
               href="#cara-kerja"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light border border-amber-300 hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
             >
               <Vote className="w-4 h-4" />
               Cara Kerja
             </a>
             <a
               href="#faq"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary bg-accent-light border border-amber-300 hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all whitespace-nowrap"
             >
               <HelpCircle className="w-4 h-4" />
               FAQ

@@ -12,17 +12,17 @@ export default function PublicLayout({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-3">
-              <Image src="/logo-zibel.jpeg" alt="Azelina.id Logo" width={40} height={40} className="w-10 h-10 rounded-xl object-cover shadow-sm hover:scale-110 transition-transform cursor-pointer" />
+              <Image src="/logo-zibel.jpeg" alt="Azelina.id Logo" width={40} height={40} className="w-10 h-10 rounded-xl object-cover shadow-sm border-[2.5px] border-amber-400 hover:scale-110 transition-transform cursor-pointer" />
               <div>
                 <h1 className="text-lg font-bold text-foreground leading-tight">Azelina.id</h1>
                 <p className="text-xs text-muted">E-Voting & Aspirasi Anonim</p>
               </div>
             </Link>
-            <nav className="hidden md:flex items-center gap-8">
-              <Link href="/" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+            <nav className="hidden md:flex items-center gap-3">
+              <Link href="/" className="text-sm font-semibold text-primary bg-accent-light border border-amber-300 px-5 py-2 rounded-xl hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all">
                 Beranda
               </Link>
-              <Link href="/edukasi" className="text-sm font-medium text-muted hover:text-primary transition-colors">
+              <Link href="/edukasi" className="text-sm font-semibold text-primary bg-accent-light border border-amber-300 px-5 py-2 rounded-xl hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all">
                 Edukasi Publik
               </Link>
             </nav>
@@ -44,7 +44,7 @@ export default function PublicLayout({
           <div className="grid md:grid-cols-4 gap-10">
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
-                <Image src="/logo-zibel.jpeg" alt="Azelina.id Logo" width={40} height={40} className="w-10 h-10 rounded-xl object-cover" />
+                <Image src="/logo-zibel.jpeg" alt="Azelina.id Logo" width={40} height={40} className="w-10 h-10 rounded-xl object-cover border-[2.5px] border-amber-400" />
                 <div>
                   <h4 className="text-lg font-bold">Azelina.id</h4>
                   <p className="text-xs text-white/60">E-Voting & Aspirasi Anonim</p>

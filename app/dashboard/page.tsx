@@ -150,6 +150,7 @@ export default function DashboardPage() {
   const [profileAddress, setProfileAddress] = useState("Jl. Al-Falah Dahor 2");
   const [profileDesa, setProfileDesa] = useState("Desa Batu Ampar");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
   const [chatRoomsList, setChatRoomsList] = useState<ChatRoom[]>(chatRooms);
@@ -159,6 +160,7 @@ export default function DashboardPage() {
   const [showSandiSuccess, setShowSandiSuccess] = useState(false);
   const [selectedKandidat, setSelectedKandidat] = useState<number | null>(null);
   const [showVotingSuccess, setShowVotingSuccess] = useState(false);
+  const [hasVoted, setHasVoted] = useState(false);
   const [votedPapanIds, setVotedPapanIds] = useState<number[]>([]);
   const [papanVotes, setPapanVotes] = useState<Record<number, number>>({
     1: 234, 2: 189, 3: 156, 4: 142, 5: 128, 6: 98,
@@ -401,7 +403,7 @@ export default function DashboardPage() {
                   <Vote className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">0</p>
+                  <p className="text-2xl font-bold text-foreground">{hasVoted ? "1" : "0"}</p>
                   <p className="text-xs text-muted">Suara Diberikan</p>
                 </div>
               </div>
@@ -479,7 +481,15 @@ export default function DashboardPage() {
                   <Vote className="w-5 h-5 text-primary" />
                   <h4 className="font-semibold text-foreground">Pemilihan Kepala Desa 2026</h4>
                 </div>
-                {showVotingSuccess ? (
+                {hasVoted ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-8 h-8 text-success" />
+                    </div>
+                    <h4 className="text-lg font-bold text-foreground mb-2">Anda Sudah Voting!</h4>
+                    <p className="text-sm text-muted mb-6">Satu akun hanya dapat memberikan satu suara. Terima kasih telah berpartisipasi dalam demokrasi desa.</p>
+                  </div>
+                ) : showVotingSuccess ? (
                   <div className="text-center py-8">
                     <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
                       <CheckCircle className="w-8 h-8 text-success" />
@@ -487,7 +497,7 @@ export default function DashboardPage() {
                     <h4 className="text-lg font-bold text-foreground mb-2">Suara Berhasil Dikirim!</h4>
                     <p className="text-sm text-muted mb-6">Pilihan Anda telah tercatat secara anonim dan aman. Terima kasih telah berpartisipasi dalam demokrasi desa.</p>
                     <button
-                      onClick={() => { setShowVotingSuccess(false); setSelectedKandidat(null); }}
+                      onClick={() => { setShowVotingSuccess(false); setHasVoted(true); }}
                       className="bg-primary text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm"
                     >
                       Kembali
@@ -815,34 +825,43 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-4 mb-6 pb-6 border-b border-border">
                   <div className="relative group">
                     {profilePhoto ? (
-                      <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover" />
+                      <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" />
                     ) : (
-                      <div className="w-20 h-20 rounded-xl bg-accent-light flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-xl bg-accent-light flex items-center justify-center border-2 border-amber-400">
                         <User className="w-10 h-10 text-primary" />
                       </div>
                     )}
                     {isEditingProfile && (
-                      <label className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                        <span className="text-white text-xs font-medium">Ganti Foto</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => setProfilePhoto(reader.result as string);
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
+                      <div className="absolute inset-0 rounded-xl flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 bg-black/50 rounded-xl" />
+                        <button onClick={() => setShowAvatarPicker(true)} className="relative z-10 p-1.5 bg-primary rounded-lg text-white hover:bg-primary-dark transition-colors" title="Pilih Avatar">
+                          <User className="w-3.5 h-3.5" />
+                        </button>
+                        <label className="relative z-10 p-1.5 bg-primary rounded-lg text-white hover:bg-primary-dark transition-colors cursor-pointer" title="Upload Foto">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => setProfilePhoto(reader.result as string);
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
                   <div>
                     <h4 className="text-lg font-bold text-foreground">{profileName}</h4>
                     <p className="text-sm text-muted">Warga &bull; {profileDesa}</p>
+                    {isEditingProfile && (
+                      <button onClick={() => setShowAvatarPicker(true)} className="text-xs text-primary hover:text-primary-dark font-medium mt-1">Ganti Avatar</button>
+                    )}
                   </div>
                 </div>
 
@@ -929,6 +948,61 @@ export default function DashboardPage() {
                     ) : (
                       <p className="text-foreground font-medium">{profileAddress}</p>
                     )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Avatar Picker */}
+          {showAvatarPicker && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAvatarPicker(false)} />
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                <div className="p-6 border-b border-border flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-foreground">Pilih Avatar</h3>
+                  <button onClick={() => setShowAvatarPicker(false)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-4 gap-3 mb-6">
+                    {["👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫", "👩‍⚕️", "👨‍⚕️", "👩‍🍳", "👨‍🍳", "🧑‍🎓", "🧑‍💻", "🧑‍🔬", "🧑‍🎨"].map((avatar) => (
+                      <button
+                        key={avatar}
+                        onClick={() => { setProfilePhoto(avatar); setShowAvatarPicker(false); }}
+                        className={`w-full aspect-square rounded-xl flex items-center justify-center text-3xl border-2 transition-all hover:scale-105 ${
+                          profilePhoto === avatar ? "border-primary bg-primary/5 shadow-md" : "border-border hover:border-accent"
+                        }`}
+                      >
+                        {avatar}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <label className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-border hover:border-accent transition-colors cursor-pointer text-sm font-medium text-muted hover:text-foreground">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      Upload dari File
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => { setProfilePhoto(reader.result as string); setShowAvatarPicker(false); };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => { setProfilePhoto(null); setShowAvatarPicker(false); }}
+                      className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted hover:text-foreground hover:bg-accent-light/50 transition-colors"
+                    >
+                      Hapus Foto (Gunakan Default)
+                    </button>
                   </div>
                 </div>
               </div>

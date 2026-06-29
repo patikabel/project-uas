@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   Shield,
   Vote,
@@ -107,10 +108,17 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      <section className="hero-gradient relative overflow-hidden">
-        <div className="absolute inset-0 bg-black/5" />
+      <section className="relative overflow-hidden min-h-[480px]">
+        <Image
+          src="/gambar1.jpeg"
+          alt="Demokrasi Desa"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-primary/40" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
-          <div className="max-w-3xl">
+          <div className="max-w-lg lg:max-w-xl">
             <div className="inline-flex items-center gap-2 bg-black/10 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-6">
               <Shield className="w-4 h-4" />
               Aman & Terpercaya
@@ -119,7 +127,7 @@ export default function Home() {
               Demokrasi Desa{" "}
               <span className="text-white/90">Digital & Adil</span>
             </h2>
-            <p className="text-lg text-white/90 mb-8 max-w-6xl leading-relaxed text-justify">
+            <p className="text-base lg:text-lg text-white/90 mb-8 leading-relaxed text-justify">
               Platform ini hadir sebagai ruang aman untuk mengawal demokrasi desa dari praktik politik uang. Website ini menyediakan fasilitas edukasi hak pilih dan wadah pelaporan kecurangan yang dijamin 100% anonim. Melalui sistem perlindungan identitas yang ketat, warga dapat dengan berani bersuara tanpa takut diintimidasi, memastikan setiap suara yang diberikan tetap murni demi mewujudkan ekosistem desa yang jujur, transparan, dan bermanfaat.
             </p>
             <p className="slogan text-2xl lg:text-3xl font-semibold text-white italic mt-2 whitespace-nowrap">
