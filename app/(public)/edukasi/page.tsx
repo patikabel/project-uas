@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   BookOpen,
   Vote,
@@ -197,8 +198,15 @@ export default function EdukasiPage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      <section className="hero-gradient relative overflow-hidden">
-        <div className="absolute inset-0 bg-black/5" />
+      <section className="relative overflow-hidden min-h-[320px]">
+        <Image
+          src="/gambar2.png"
+          alt="Edukasi Publik"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-primary/40" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 bg-black/10 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-6">

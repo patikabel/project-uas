@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   MessageSquare,
   Vote,
@@ -27,6 +29,7 @@ import {
   CheckSquare,
   TrendingUp,
   PieChart,
+  Download,
 } from "lucide-react";
 
 const sidebarMenu = [
@@ -159,6 +162,19 @@ const autoReplies: Record<string, string[]> = {
   ],
 };
 
+function parseTanggalIndo(tgl: string): string {
+  const months: Record<string, string> = {
+    "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "Mei": "05", "Jun": "06",
+    "Jul": "07", "Agu": "08", "Sep": "09", "Okt": "10", "Nov": "11", "Des": "12",
+  };
+  const parts = tgl.split(" ");
+  if (parts.length < 3) return tgl;
+  const day = parts[0].padStart(2, "0");
+  const month = months[parts[1]] || "01";
+  const year = parts[2];
+  return `${year}-${month}-${day}`;
+}
+
 interface NotifItem {
   id: number;
   type: "aspirasi" | "chat";
@@ -175,6 +191,8 @@ export default function AdminDashboardPage() {
   const [wargaList] = useState<Warga[]>(initialWargaList);
   const [kandidatList, setKandidatList] = useState<Kandidat[]>(initialKandidatList);
   const [showFormKandidat, setShowFormKandidat] = useState(false);
+  const [showEditKandidat, setShowEditKandidat] = useState(false);
+  const [editKandidatId, setEditKandidatId] = useState<number | null>(null);
   const [formKandidatNama, setFormKandidatNama] = useState("");
   const [formKandidatVisi, setFormKandidatVisi] = useState("");
   const [formKandidatFoto, setFormKandidatFoto] = useState("👤");
@@ -196,6 +214,8 @@ export default function AdminDashboardPage() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showSandiSuccess, setShowSandiSuccess] = useState(false);
   const [aspirasiFilter, setAspirasiFilter] = useState("Semua");
+  const [aspirasiDateStart, setAspirasiDateStart] = useState("");
+  const [aspirasiDateEnd, setAspirasiDateEnd] = useState("");
   const [wargaSearch, setWargaSearch] = useState("");
   const [wargaFilter, setWargaFilter] = useState("Semua");
   const [selectedPapanPublik, setSelectedPapanPublik] = useState<{ id: number; desa: string; judul: string; kategori: string; votes: number; status: string; waktu: string; deskripsi: string } | null>(null);
@@ -211,9 +231,15 @@ export default function AdminDashboardPage() {
   const wargaAktif = wargaList.filter((w) => w.status === "Aktif").length;
   const totalSuara = kandidatList.reduce((sum, k) => sum + k.suara, 0);
 
-  const filteredAspirasi = aspirasiFilter === "Semua"
-    ? aspirasiList
-    : aspirasiList.filter((a) => a.status === aspirasiFilter);
+  const filteredAspirasi = aspirasiList
+    .filter((a) => aspirasiFilter === "Semua" || a.status === aspirasiFilter)
+    .filter((a) => {
+      if (!aspirasiDateStart && !aspirasiDateEnd) return true;
+      const tgl = parseTanggalIndo(a.tanggal);
+      if (aspirasiDateStart && tgl < aspirasiDateStart) return false;
+      if (aspirasiDateEnd && tgl > aspirasiDateEnd) return false;
+      return true;
+    });
 
   const filteredWarga = wargaSearch
     ? wargaList.filter((w) => w.nama.toLowerCase().includes(wargaSearch.toLowerCase()) || w.desa.toLowerCase().includes(wargaSearch.toLowerCase()))
@@ -229,6 +255,112 @@ export default function AdminDashboardPage() {
       time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
       read: false,
     }, ...notifications]);
+  };
+
+  const handleDownloadLaporan = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("Laporan Azelina.id", pageWidth / 2, 20, { align: "center" });
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Dicetak: ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 28, { align: "center" });
+
+    let y = 40;
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Ringkasan Statistik", 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total Aspirasi: ${aspirasiList.length}`, 14, y); y += 6;
+    doc.text(`Diterima: ${aspirasiDiterima}  |  Diproses: ${aspirasiDiproses}  |  Selesai: ${aspirasiSelesai}`, 14, y); y += 6;
+    doc.text(`Warga Aktif: ${wargaAktif} dari ${wargaList.length}`, 14, y); y += 6;
+    doc.text(`Total Suara Voting: ${totalSuara.toLocaleString("id-ID")}`, 14, y); y += 12;
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Data Aspirasi", 14, y);
+    y += 4;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["ID", "Judul", "Kategori", "Desa", "Tanggal", "Status"]],
+      body: aspirasiList.map((a) => [a.id, a.judul, a.kategori, a.desa, a.tanggal, a.status]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [201, 61, 114] },
+      alternateRowStyles: { fillColor: [252, 228, 239] },
+    });
+
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Hasil Voting", 14, y);
+    y += 4;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["No", "Kandidat", "Visi", "Suara", "Persentase"]],
+      body: [...kandidatList]
+        .sort((a, b) => b.suara - a.suara)
+        .map((k, i) => [
+          String(i + 1),
+          k.nama,
+          k.visi.length > 50 ? k.visi.substring(0, 50) + "..." : k.visi,
+          k.suara.toLocaleString("id-ID"),
+          `${((k.suara / totalSuara) * 100).toFixed(1)}%`,
+        ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [201, 61, 114] },
+      alternateRowStyles: { fillColor: [252, 228, 239] },
+    });
+
+    doc.save("laporan-azelina.pdf");
+  };
+
+  const handleDownloadAspirasiPdf = (aspirasi: Aspirasi) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("Laporan Aspirasi", pageWidth / 2, 20, { align: "center" });
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Azelina.id - ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 28, { align: "center" });
+
+    let y = 45;
+
+    const fields = [
+      { label: "ID Aspirasi", value: aspirasi.id },
+      { label: "Judul", value: aspirasi.judul },
+      { label: "Kategori", value: aspirasi.kategori },
+      { label: "Status", value: aspirasi.status },
+      { label: "Desa", value: aspirasi.desa },
+      { label: "Tanggal", value: aspirasi.tanggal },
+    ];
+
+    fields.forEach((f) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(f.label + ":", 14, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(f.value, 60, y);
+      y += 8;
+    });
+
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text("Deskripsi:", 14, y);
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    const lines = doc.splitTextToSize(aspirasi.deskripsi, pageWidth - 28);
+    doc.text(lines, 14, y);
+
+    doc.save(`aspirasi-${aspirasi.id}.pdf`);
   };
 
   return (
@@ -567,9 +699,9 @@ export default function AdminDashboardPage() {
           {/* Kelola Aspirasi Section */}
           {activeSection === "aspirasi" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <h3 className="text-xl font-bold text-foreground">Kelola Aspirasi</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {["Semua", "Diterima", "Diproses", "Selesai"].map((filter) => (
                     <button
                       key={filter}
@@ -584,6 +716,36 @@ export default function AdminDashboardPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Date Filter */}
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted">Dari:</span>
+                  <input
+                    type="date"
+                    value={aspirasiDateStart}
+                    onChange={(e) => setAspirasiDateStart(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-border text-sm text-foreground focus:outline-none input-focus"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted">Sampai:</span>
+                  <input
+                    type="date"
+                    value={aspirasiDateEnd}
+                    onChange={(e) => setAspirasiDateEnd(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-border text-sm text-foreground focus:outline-none input-focus"
+                  />
+                </div>
+                {(aspirasiDateStart || aspirasiDateEnd) && (
+                  <button
+                    onClick={() => { setAspirasiDateStart(""); setAspirasiDateEnd(""); }}
+                    className="text-xs font-medium text-primary hover:text-primary-dark transition-colors"
+                  >
+                    Reset Tanggal
+                  </button>
+                )}
               </div>
 
               <div className="bg-white rounded-xl border border-border">
@@ -637,7 +799,7 @@ export default function AdminDashboardPage() {
                 {filteredAspirasi.length === 0 && (
                   <div className="text-center py-8">
                     <MessageSquare className="w-12 h-12 text-muted/30 mx-auto mb-3" />
-                    <p className="text-muted">Tidak ada aspirasi dengan status &quot;{aspirasiFilter}&quot;</p>
+                    <p className="text-muted">Tidak ada aspirasi yang cocok dengan filter</p>
                   </div>
                 )}
               </div>
@@ -670,6 +832,42 @@ export default function AdminDashboardPage() {
                       onClick={() => setSelectedKandidatDetail(kandidat)}
                       className="p-5 rounded-xl border-2 border-border hover:border-accent transition-all cursor-pointer"
                     >
+                      <div className="flex items-center justify-end gap-1 mb-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditKandidatId(kandidat.id);
+                            setFormKandidatNama(kandidat.nama);
+                            setFormKandidatVisi(kandidat.visi);
+                            setFormKandidatFoto(kandidat.foto);
+                            setShowEditKandidat(true);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
+                          title="Edit Kandidat"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Hapus kandidat ${kandidat.nama}?`)) {
+                              setKandidatList(kandidatList.filter((k) => k.id !== kandidat.id));
+                              setNotifications([{
+                                id: Date.now(),
+                                type: "aspirasi",
+                                title: "Kandidat Dihapus",
+                                message: `${kandidat.nama} telah dihapus dari daftar kandidat`,
+                                time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+                                read: false,
+                              }, ...notifications]);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted hover:text-red-500 transition-colors"
+                          title="Hapus Kandidat"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                       <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center mx-auto mb-3 text-3xl">
                         {kandidat.foto}
                       </div>
@@ -1161,9 +1359,18 @@ export default function AdminDashboardPage() {
                 <h3 className="text-xl font-bold text-foreground">Detail Aspirasi</h3>
                 <p className="text-sm text-muted">{selectedAspirasi.id}</p>
               </div>
-              <button onClick={() => setSelectedAspirasi(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadAspirasiPdf(selectedAspirasi)}
+                  className="inline-flex items-center gap-1.5 bg-primary text-white px-3 py-2 rounded-xl text-xs font-semibold hover:bg-primary-dark transition-colors shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  PDF
+                </button>
+                <button onClick={() => setSelectedAspirasi(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -1329,6 +1536,92 @@ export default function AdminDashboardPage() {
                 <button type="submit" className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm">
                   <User className="w-4 h-4" />
                   Tambah Kandidat
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Form Edit Kandidat */}
+      {showEditKandidat && editKandidatId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowEditKandidat(false); setEditKandidatId(null); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b border-border flex items-center justify-between">
+              <h3 className="text-xl font-bold text-foreground">Edit Kandidat</h3>
+              <button onClick={() => { setShowEditKandidat(false); setEditKandidatId(null); }} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!formKandidatNama || !formKandidatVisi) return;
+                  setKandidatList(kandidatList.map((k) =>
+                    k.id === editKandidatId
+                      ? { ...k, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto }
+                      : k
+                  ));
+                  setNotifications([{
+                    id: Date.now(),
+                    type: "aspirasi",
+                    title: "Kandidat Diperbarui",
+                    message: `Data kandidat ${formKandidatNama} berhasil diperbarui`,
+                    time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+                    read: false,
+                  }, ...notifications]);
+                  setFormKandidatNama("");
+                  setFormKandidatVisi("");
+                  setFormKandidatFoto("👤");
+                  setShowEditKandidat(false);
+                  setEditKandidatId(null);
+                }}
+                className="space-y-5"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Foto / Avatar</label>
+                  <div className="flex flex-wrap gap-2">
+                    {["👤", "👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫"].map((avatar) => (
+                      <button
+                        key={avatar}
+                        type="button"
+                        onClick={() => setFormKandidatFoto(avatar)}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border-2 transition-all ${
+                          formKandidatFoto === avatar ? "border-primary bg-primary/5 shadow-md" : "border-border hover:border-accent"
+                        }`}
+                      >
+                        {avatar}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Nama Lengkap</label>
+                  <input
+                    type="text"
+                    value={formKandidatNama}
+                    onChange={(e) => setFormKandidatNama(e.target.value)}
+                    placeholder="Masukkan nama kandidat"
+                    className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Visi & Misi</label>
+                  <textarea
+                    rows={3}
+                    value={formKandidatVisi}
+                    onChange={(e) => setFormKandidatVisi(e.target.value)}
+                    placeholder="Tuliskan visi dan misi kandidat..."
+                    className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus resize-none"
+                    required
+                  />
+                </div>
+                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm">
+                  <User className="w-4 h-4" />
+                  Simpan Perubahan
                 </button>
               </form>
             </div>

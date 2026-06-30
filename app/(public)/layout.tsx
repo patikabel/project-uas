@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import ScrollToTop from "./scroll-to-top";
 
 export default function PublicLayout({
   children,
@@ -11,13 +12,13 @@ export default function PublicLayout({
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
+            <ScrollToTop className="flex items-center gap-3">
               <Image src="/logo-zibel.jpeg" alt="Azelina.id Logo" width={40} height={40} className="w-10 h-10 rounded-xl object-cover shadow-sm border-[2.5px] border-amber-400 hover:scale-110 transition-transform cursor-pointer" />
               <div>
                 <h1 className="text-lg font-bold text-foreground leading-tight">Azelina.id</h1>
                 <p className="text-xs text-muted">E-Voting & Aspirasi Anonim</p>
               </div>
-            </Link>
+            </ScrollToTop>
             <nav className="hidden md:flex items-center gap-3">
               <Link href="/" className="text-sm font-semibold text-primary bg-accent-light border border-amber-300 px-5 py-2 rounded-xl hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all">
                 Beranda
