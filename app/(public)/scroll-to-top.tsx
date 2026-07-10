@@ -2,6 +2,7 @@
 
 import { type ReactNode } from "react";
 
+// Komponen wrapper: scroll ke atas saat diklik
 interface ScrollToTopProps {
   children: ReactNode;
   className?: string;

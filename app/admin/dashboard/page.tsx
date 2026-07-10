@@ -1,73 +1,107 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { z } from "zod";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  flexRender,
+  type ColumnDef,
+} from "@tanstack/react-table";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-  MessageSquare,
-  Vote,
-  Globe,
-  User,
-  Lock,
-  LogOut,
-  Menu,
-  X,
-  Send,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Bell,
-  Headphones,
-  MapPin,
-  BarChart3,
-  Users,
-  Settings,
-  FileText,
-  Eye,
-  Trash2,
-  CheckSquare,
-  TrendingUp,
-  PieChart,
-  Download,
-} from "lucide-react";
+  IconMessage,
+  IconClipboardList,
+  IconWorld,
+  IconUser,
+  IconLock,
+  IconLogout,
+  IconMenu,
+  IconX,
+  IconSend,
+  IconClock,
+  IconCircleCheck,
+  IconBell,
+  IconHeadphones,
+  IconMapPin,
+  IconChartBar,
+  IconUsers,
+  IconSettings,
+  IconFileText,
+  IconEye,
+  IconTrash,
+  IconTrendingUp,
+  IconChartPie,
+  IconDownload,
+} from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-const sidebarMenu = [
-  {
-    label: "Manajemen",
-    items: [
-      { icon: BarChart3, label: "Statistik", href: "#statistik" },
-      { icon: MessageSquare, label: "Kelola Aspirasi", href: "#aspirasi" },
-      { icon: Vote, label: "Kelola Voting", href: "#voting" },
-      { icon: Users, label: "Kelola Warga", href: "#warga" },
-      { icon: Globe, label: "Papan Publik", href: "#papan" },
-    ],
-  },
-  {
-    label: "Komunikasi",
-    items: [
-      { icon: Headphones, label: "Chat Warga", href: "#chat" },
-    ],
-  },
-  {
-    label: "Pengaturan",
-    items: [
-      { icon: User, label: "Profil Saya", href: "#profil" },
-      { icon: Lock, label: "Ganti Kata Sandi", href: "#sandi" },
-      { icon: LogOut, label: "Keluar", href: "/login" },
-    ],
-  },
+// === Schema validasi Zod: form tambah/edit kandidat ===
+const kandidatSchema = z.object({
+  nama: z.string().min(2, "Nama harus minimal 2 karakter"),
+  visi: z.string().min(10, "Visi harus minimal 10 karakter"),
+});
+
+// === Schema validasi Zod: form ganti kata sandi ===
+const passwordSchema = z
+  .object({
+    oldPassword: z.string().min(1, "Kata sandi lama harus diisi"),
+    newPassword: z.string().min(6, "Kata sandi baru minimal 6 karakter"),
+    confirmPassword: z.string().min(1, "Konfirmasi harus diisi"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Konfirmasi kata sandi tidak cocok",
+    path: ["confirmPassword"],
+  });
+
+// === Warna badge status ===
+const STATUS_COLORS: Record<string, string> = {
+  Diproses: "bg-primary/10 text-primary",
+  Diterima: "bg-accent-light text-primary-dark",
+  Selesai: "bg-success/10 text-success",
+};
+
+// === Data desa untuk filter ===
+const daftarDesa = [
+  "Desa Batu Ampar", "Desa Sempaja", "Desa Prapatan", "Desa Klandasan",
+  "Desa Damai", "Desa Manggar",
 ];
 
-const kategoriMasalah = [
-  { id: "infra", label: "Infrastruktur", icon: "🚧" },
-  { id: "lingkungan", label: "Lingkungan", icon: "🌿" },
-  { id: "pelayanan", label: "Pelayanan Publik", icon: "🏛️" },
-  { id: "keamanan", label: "Keamanan", icon: "🛡️" },
-  { id: "kesehatan", label: "Kesehatan", icon: "🏥" },
-  { id: "pendidikan", label: "Pendidikan", icon: "📚" },
-];
-
+// === Tipe data ===
 interface Aspirasi {
   id: string;
   judul: string;
@@ -89,6 +123,14 @@ interface Warga {
   tanggalDaftar: string;
 }
 
+interface Kandidat {
+  id: number;
+  nama: string;
+  visi: string;
+  foto: string;
+  suara: number;
+}
+
 interface ChatMessage {
   id: number;
   sender: "user" | "petugas";
@@ -107,74 +149,6 @@ interface ChatRoom {
   messages: ChatMessage[];
 }
 
-interface Kandidat {
-  id: number;
-  nama: string;
-  visi: string;
-  foto: string;
-  suara: number;
-}
-
-const initialAspirasiList: Aspirasi[] = [
-  { id: "ASP-001", judul: "Jalan Rusak di RT 05", kategori: "Infrastruktur", deskripsi: "Jalan di RT 05 mengalami kerusakan parah akibat hujan deras. Lubang-lubang besar membahayakan pengendara dan pejalan kaki.", status: "Diproses", tanggal: "27 Jun 2026", desa: "Desa Batu Ampar" },
-  { id: "ASP-002", judul: "Pencemaran Sungai", kategori: "Lingkungan", deskripsi: "Sungai di sekitar Desa Sempaja tercemar limbah domestik. Warga meminta penanganan segera.", status: "Diterima", tanggal: "26 Jun 2026", desa: "Desa Sempaja" },
-  { id: "ASP-003", judul: "Lambatnya Pengurusan Dokumen", kategori: "Pelayanan", deskripsi: "Pengurusan dokumen kependudukan di kantor desa memakan waktu terlalu lama.", status: "Selesai", tanggal: "25 Jun 2026", desa: "Desa Prapatan" },
-  { id: "ASP-004", judul: "Penerangan Jalan Mati", kategori: "Keamanan", deskripsi: "Lampu penerangan jalan di beberapa titik sudah mati selama 2 minggu.", status: "Diproses", tanggal: "24 Jun 2026", desa: "Desa Klandasan" },
-  { id: "ASP-005", judul: "Kurangnya Fasilitas Puskesmas", kategori: "Kesehatan", deskripsi: "Puskesmas desa kekurangan alat kesehatan dan tenaga medis.", status: "Diterima", tanggal: "23 Jun 2026", desa: "Desa Damai" },
-  { id: "ASP-006", judul: "Kekurangan Guru", kategori: "Pendidikan", deskripsi: "Sekolah desa kekurangan guru tetap, terutama mata pelajaran IPA dan Matematika.", status: "Diproses", tanggal: "22 Jun 2026", desa: "Desa Manggar" },
-];
-
-const initialWargaList: Warga[] = [
-  { id: "W-001", nama: "Abel Zihan", nik: "6472012345678901", desa: "Desa Batu Ampar", email: "abelzihan@gmail.com", telepon: "089608574922", status: "Aktif", tanggalDaftar: "10 Jun 2026" },
-  { id: "W-002", nama: "Rina Wati", nik: "6472012345678902", desa: "Desa Sempaja", email: "rinawati@gmail.com", telepon: "081234567890", status: "Aktif", tanggalDaftar: "12 Jun 2026" },
-  { id: "W-003", nama: "Supriadi", nik: "6472012345678903", desa: "Desa Prapatan", email: "supriadi@gmail.com", telepon: "085678901234", status: "Aktif", tanggalDaftar: "15 Jun 2026" },
-  { id: "W-004", nama: "Maya Putri", nik: "6472012345678904", desa: "Desa Klandasan", email: "mayaputri@gmail.com", telepon: "087890123456", status: "Aktif", tanggalDaftar: "18 Jun 2026" },
-  { id: "W-005", nama: "Joko Susilo", nik: "6472012345678905", desa: "Desa Damai", email: "jokosusilo@gmail.com", telepon: "089012345678", status: "Tidak Aktif", tanggalDaftar: "20 Jun 2026" },
-  { id: "W-006", nama: "Sari Dewi", nik: "6472012345678906", desa: "Desa Manggar", email: "saridewi@gmail.com", telepon: "083456789012", status: "Aktif", tanggalDaftar: "22 Jun 2026" },
-];
-
-const initialKandidatList: Kandidat[] = [
-  { id: 1, nama: "Siti Aminah", visi: "Desa yang maju, sejahtera, dan berdaya saing tinggi melalui inovasi teknologi dan pemberdayaan UMKM.", foto: "👩", suara: 1842 },
-  { id: 2, nama: "Budi Santoso", visi: "Transparansi anggaran, partisipasi warga aktif, dan pembangunan infrastruktur merata di semua dusun.", foto: "👨", suara: 1654 },
-  { id: 3, nama: "Rahmawati", visi: "Lingkungan hijau, clean energy, dan kesehatan masyarakat yang prima untuk generasi masa depan.", foto: "👩", suara: 1520 },
-];
-
-const chatRooms: ChatRoom[] = [
-  { id: 1, wargaName: "Rina Wati", role: "Warga Desa Sempaja", status: "online", lastMessage: "", lastTime: "", messages: [] },
-  { id: 2, wargaName: "Supriadi", role: "Warga Desa Prapatan", status: "online", lastMessage: "", lastTime: "", messages: [] },
-  { id: 3, wargaName: "Maya Putri", role: "Warga Desa Klandasan", status: "offline", lastMessage: "", lastTime: "", messages: [] },
-];
-
-const autoReplies: Record<string, string[]> = {
-  "Rina Wati": [
-    "Terima kasih atas aspirasinya. Kami akan segera menindaklanjuti.",
-    "Laporan Anda sudah kami terima dan akan diproses.",
-    "Silakan sampaikan keluhan Anda, kami siap membantu.",
-  ],
-  "Supriadi": [
-    "Halo! Ada yang bisa kami bantu?",
-    "Terima kasih telah menghubungi kami.",
-    "Kami akan koordinasi dengan tim terkait.",
-  ],
-  "Maya Putri": [
-    "Terima kasih pesannya. Akan segera kami tindaklanjuti.",
-    "Kami catat laporan Anda. Terima kasih.",
-  ],
-};
-
-function parseTanggalIndo(tgl: string): string {
-  const months: Record<string, string> = {
-    "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "Mei": "05", "Jun": "06",
-    "Jul": "07", "Agu": "08", "Sep": "09", "Okt": "10", "Nov": "11", "Des": "12",
-  };
-  const parts = tgl.split(" ");
-  if (parts.length < 3) return tgl;
-  const day = parts[0].padStart(2, "0");
-  const month = months[parts[1]] || "01";
-  const year = parts[2];
-  return `${year}-${month}-${day}`;
-}
-
 interface NotifItem {
   id: number;
   type: "aspirasi" | "chat";
@@ -184,26 +158,109 @@ interface NotifItem {
   read: boolean;
 }
 
+// === Data awal aspirasi ===
+const initialAspirasiList: Aspirasi[] = [
+  { id: "ASP-001", judul: "Jalan Rusak di RT 05", kategori: "Infrastruktur", deskripsi: "Jalan di RT 05 mengalami kerusakan parah akibat hujan deras. Lubang-lubang besar membahayakan pengendara dan pejalan kaki.", status: "Diproses", tanggal: "27 Jun 2026", desa: "Desa Batu Ampar" },
+  { id: "ASP-002", judul: "Pencemaran Sungai", kategori: "Lingkungan", deskripsi: "Sungai di sekitar Desa Sempaja tercemar limbah domestik. Warga meminta penanganan segera.", status: "Diterima", tanggal: "26 Jun 2026", desa: "Desa Sempaja" },
+  { id: "ASP-003", judul: "Lambatnya Pengurusan Dokumen", kategori: "Pelayanan", deskripsi: "Pengurusan dokumen kependudukan di kantor desa memakan waktu terlalu lama.", status: "Selesai", tanggal: "25 Jun 2026", desa: "Desa Prapatan" },
+  { id: "ASP-004", judul: "Penerangan Jalan Mati", kategori: "Keamanan", deskripsi: "Lampu penerangan jalan di beberapa titik sudah mati selama 2 minggu.", status: "Diproses", tanggal: "24 Jun 2026", desa: "Desa Klandasan" },
+  { id: "ASP-005", judul: "Kurangnya Fasilitas Puskesmas", kategori: "Kesehatan", deskripsi: "Puskesmas desa kekurangan alat kesehatan dan tenaga medis.", status: "Diterima", tanggal: "23 Jun 2026", desa: "Desa Damai" },
+  { id: "ASP-006", judul: "Kekurangan Guru", kategori: "Pendidikan", deskripsi: "Sekolah desa kekurangan guru tetap, terutama mata pelajaran IPA dan Matematika.", status: "Diproses", tanggal: "22 Jun 2026", desa: "Desa Manggar" },
+];
+
+// === Data awal warga ===
+const initialWargaList: Warga[] = [
+  { id: "W-001", nama: "Abel Zihan", nik: "6472012345678901", desa: "Desa Batu Ampar", email: "abelzihan@gmail.com", telepon: "089608574922", status: "Aktif", tanggalDaftar: "10 Jun 2026" },
+  { id: "W-002", nama: "Rina Wati", nik: "6472012345678902", desa: "Desa Sempaja", email: "rinawati@gmail.com", telepon: "081234567890", status: "Aktif", tanggalDaftar: "12 Jun 2026" },
+  { id: "W-003", nama: "Supriadi", nik: "6472012345678903", desa: "Desa Prapatan", email: "supriadi@gmail.com", telepon: "085678901234", status: "Aktif", tanggalDaftar: "15 Jun 2026" },
+  { id: "W-004", nama: "Maya Putri", nik: "6472012345678904", desa: "Desa Klandasan", email: "mayaputri@gmail.com", telepon: "087890123456", status: "Aktif", tanggalDaftar: "18 Jun 2026" },
+  { id: "W-005", nama: "Joko Susilo", nik: "6472012345678905", desa: "Desa Damai", email: "jokosusilo@gmail.com", telepon: "089012345678", status: "Tidak Aktif", tanggalDaftar: "20 Jun 2026" },
+  { id: "W-006", nama: "Sari Dewi", nik: "6472012345678906", desa: "Desa Manggar", email: "saridewi@gmail.com", telepon: "083456789012", status: "Aktif", tanggalDaftar: "22 Jun 2026" },
+];
+
+// === Data awal kandidat ===
+const initialKandidatList: Kandidat[] = [
+  { id: 1, nama: "Siti Aminah", visi: "Desa yang maju, sejahtera, dan berdaya saing tinggi melalui inovasi teknologi dan pemberdayaan UMKM.", foto: "👩", suara: 1842 },
+  { id: 2, nama: "Budi Santoso", visi: "Transparansi anggaran, partisipasi warga aktif, dan pembangunan infrastruktur merata di semua dusun.", foto: "👨", suara: 1654 },
+  { id: 3, nama: "Rahmawati", visi: "Lingkungan hijau, clean energy, dan kesehatan masyarakat yang prima untuk generasi masa depan.", foto: "👩", suara: 1520 },
+];
+
+// === Data chat rooms admin ===
+const chatRooms: ChatRoom[] = [
+  { id: 1, wargaName: "Rina Wati", role: "Warga Desa Sempaja", status: "online", lastMessage: "", lastTime: "", messages: [] },
+  { id: 2, wargaName: "Supriadi", role: "Warga Desa Prapatan", status: "online", lastMessage: "", lastTime: "", messages: [] },
+  { id: 3, wargaName: "Maya Putri", role: "Warga Desa Klandasan", status: "offline", lastMessage: "", lastTime: "", messages: [] },
+];
+
+// === Balasan otomatis admin ===
+const autoReplies: Record<string, string[]> = {
+  "Rina Wati": ["Terima kasih atas aspirasinya. Kami akan segera menindaklanjuti.", "Laporan Anda sudah kami terima dan akan diproses."],
+  "Supriadi": ["Halo! Ada yang bisa kami bantu?", "Kami akan koordinasi dengan tim terkait."],
+  "Maya Putri": ["Terima kasih pesannya. Akan segera kami tindaklanjuti.", "Kami catat laporan Anda. Terima kasih."],
+};
+
+// === Papan publik data ===
+const papanPublikData = [
+  { id: 1, desa: "Desa Batu Ampar", judul: "Perbaikan Jalan Rusak di RT 05", kategori: "Infrastruktur", votes: 234, status: "Aktif", waktu: "2 jam lalu", deskripsi: "Jalan di RT 05 mengalami kerusakan parah." },
+  { id: 2, desa: "Desa Sempaja", judul: "Distribusi Air Bersih untuk Warga", kategori: "Pelayanan", votes: 189, status: "Aktif", waktu: "5 jam lalu", deskripsi: "Beberapa RT masih mengalami kekurangan air bersih." },
+  { id: 3, desa: "Desa Prapatan", judul: "Penerangan Jalan Umum Mati", kategori: "Keamanan", votes: 156, status: "Aktif", waktu: "1 hari lalu", deskripsi: "Lampu penerangan jalan sudah mati selama 2 minggu." },
+  { id: 4, desa: "Desa Klandasan", judul: "Fasilitas Posyandu yang Layak", kategori: "Kesehatan", votes: 142, status: "Aktif", waktu: "1 hari lalu", deskripsi: "Posyandu membutuhkan perbaikan fasilitas." },
+  { id: 5, desa: "Desa Damai", judul: "Pembangunan Trotoar Pejalan Kaki", kategori: "Infrastruktur", votes: 128, status: "Selesai", waktu: "2 hari lalu", deskripsi: "Warga mengusulkan pembangunan trotoar." },
+  { id: 6, desa: "Desa Manggar", judul: "Pengadaan Sampah Organik", kategori: "Lingkungan", votes: 98, status: "Aktif", waktu: "3 hari lalu", deskripsi: "Sampah organik belum ditangani dengan baik." },
+];
+
+// === Helper: parse tanggal Indonesia ===
+function parseTanggalIndo(tgl: string): string {
+  const months: Record<string, string> = { Jan: "01", Feb: "02", Mar: "03", Apr: "04", Mei: "05", Jun: "06", Jul: "07", Agu: "08", Sep: "09", Okt: "10", Nov: "11", Des: "12" };
+  const parts = tgl.split(" ");
+  if (parts.length < 3) return tgl;
+  return `${parts[2]}-${months[parts[1]] || "01"}-${parts[0].padStart(2, "0")}`;
+}
+
+// ============================================================
+// KOMPONEN HALAMAN DASHBOARD ADMIN
+// ============================================================
 export default function AdminDashboardPage() {
+  // === State UI ===
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("statistik");
+  const [showNotif, setShowNotif] = useState(false);
+
+  // === State data ===
   const [aspirasiList, setAspirasiList] = useState<Aspirasi[]>(initialAspirasiList);
   const [wargaList] = useState<Warga[]>(initialWargaList);
   const [kandidatList, setKandidatList] = useState<Kandidat[]>(initialKandidatList);
+  const [chatRoomsList, setChatRoomsList] = useState<ChatRoom[]>(chatRooms);
+  const [selectedChatRoom, setSelectedChatRoom] = useState<ChatRoom | null>(null);
+  const [chatMessage, setChatMessage] = useState("");
+  const [notifications, setNotifications] = useState<NotifItem[]>([]);
+  const [papanVotes] = useState<Record<number, number>>({ 1: 234, 2: 189, 3: 156, 4: 142, 5: 128, 6: 98 });
+
+  // === State form kandidat ===
   const [showFormKandidat, setShowFormKandidat] = useState(false);
   const [showEditKandidat, setShowEditKandidat] = useState(false);
   const [editKandidatId, setEditKandidatId] = useState<number | null>(null);
   const [formKandidatNama, setFormKandidatNama] = useState("");
   const [formKandidatVisi, setFormKandidatVisi] = useState("");
   const [formKandidatFoto, setFormKandidatFoto] = useState("👤");
+
+  // === State filter ===
+  const [aspirasiFilter, setAspirasiFilter] = useState("Semua");
+  const [aspirasiDateStart, setAspirasiDateStart] = useState("");
+  const [aspirasiDateEnd, setAspirasiDateEnd] = useState("");
+  const [wargaSearch, setWargaSearch] = useState("");
+  const [wargaFilter, setWargaFilter] = useState("Semua");
+  const [globalFilter, setGlobalFilter] = useState("");
+
+  // === State modals ===
   const [selectedAspirasi, setSelectedAspirasi] = useState<Aspirasi | null>(null);
   const [selectedWarga, setSelectedWarga] = useState<Warga | null>(null);
   const [selectedKandidatDetail, setSelectedKandidatDetail] = useState<Kandidat | null>(null);
-  const [showNotif, setShowNotif] = useState(false);
-  const [notifications, setNotifications] = useState<NotifItem[]>([]);
-  const [chatRoomsList, setChatRoomsList] = useState<ChatRoom[]>(chatRooms);
-  const [selectedChatRoom, setSelectedChatRoom] = useState<ChatRoom | null>(null);
-  const [chatMessage, setChatMessage] = useState("");
+  const [selectedPapanPublik, setSelectedPapanPublik] = useState<(typeof papanPublikData)[0] | null>(null);
+  const [statModal, setStatModal] = useState<"voting" | "aspirasi-terbaru" | "kandidat" | null>(null);
+  const [statBubbleModal, setStatBubbleModal] = useState<"aspirasi" | "warga" | "suara" | "selesai" | null>(null);
+
+  // === State profil ===
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState("Admin Azelina");
   const [profileEmail, setProfileEmail] = useState("admin@azelina.id");
@@ -213,25 +270,16 @@ export default function AdminDashboardPage() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showSandiSuccess, setShowSandiSuccess] = useState(false);
-  const [aspirasiFilter, setAspirasiFilter] = useState("Semua");
-  const [aspirasiDateStart, setAspirasiDateStart] = useState("");
-  const [aspirasiDateEnd, setAspirasiDateEnd] = useState("");
-  const [wargaSearch, setWargaSearch] = useState("");
-  const [wargaFilter, setWargaFilter] = useState("Semua");
-  const [selectedPapanPublik, setSelectedPapanPublik] = useState<{ id: number; desa: string; judul: string; kategori: string; votes: number; status: string; waktu: string; deskripsi: string } | null>(null);
-  const [statModal, setStatModal] = useState<"aspirasi-status" | "voting" | "aspirasi-terbaru" | "kandidat" | null>(null);
-  const [statBubbleModal, setStatBubbleModal] = useState<"aspirasi" | "warga" | "suara" | "selesai" | null>(null);
-  const [papanVotes, setPapanVotes] = useState<Record<number, number>>({
-    1: 234, 2: 189, 3: 156, 4: 142, 5: 128, 6: 98,
-  });
 
-  const aspirasiDiproses = aspirasiList.filter((a) => a.status === "Diproses").length;
-  const aspirasiSelesai = aspirasiList.filter((a) => a.status === "Selesai").length;
-  const aspirasiDiterima = aspirasiList.filter((a) => a.status === "Diterima").length;
-  const wargaAktif = wargaList.filter((w) => w.status === "Aktif").length;
-  const totalSuara = kandidatList.reduce((sum, k) => sum + k.suara, 0);
+  // === Derived data ===
+  const aspirasiDiproses = useMemo(() => aspirasiList.filter((a) => a.status === "Diproses").length, [aspirasiList]);
+  const aspirasiSelesai = useMemo(() => aspirasiList.filter((a) => a.status === "Selesai").length, [aspirasiList]);
+  const aspirasiDiterima = useMemo(() => aspirasiList.filter((a) => a.status === "Diterima").length, [aspirasiList]);
+  const wargaAktif = useMemo(() => wargaList.filter((w) => w.status === "Aktif").length, [wargaList]);
+  const totalSuara = useMemo(() => kandidatList.reduce((sum, k) => sum + k.suara, 0), [kandidatList]);
 
-  const filteredAspirasi = aspirasiList
+  // === Filter aspirasi ===
+  const filteredAspirasi = useMemo(() => aspirasiList
     .filter((a) => aspirasiFilter === "Semua" || a.status === aspirasiFilter)
     .filter((a) => {
       if (!aspirasiDateStart && !aspirasiDateEnd) return true;
@@ -239,176 +287,237 @@ export default function AdminDashboardPage() {
       if (aspirasiDateStart && tgl < aspirasiDateStart) return false;
       if (aspirasiDateEnd && tgl > aspirasiDateEnd) return false;
       return true;
-    });
+    }), [aspirasiList, aspirasiFilter, aspirasiDateStart, aspirasiDateEnd]);
 
-  const filteredWarga = wargaSearch
+  // === Filter warga ===
+  const filteredWarga = useMemo(() => wargaSearch
     ? wargaList.filter((w) => w.nama.toLowerCase().includes(wargaSearch.toLowerCase()) || w.desa.toLowerCase().includes(wargaSearch.toLowerCase()))
-    : wargaList;
+    : wargaList, [wargaList, wargaSearch]);
 
-  const handleStatusChange = (aspirasiId: string, newStatus: string) => {
-    setAspirasiList(aspirasiList.map((a) => a.id === aspirasiId ? { ...a, status: newStatus } : a));
-    setNotifications([{
-      id: Date.now(),
-      type: "aspirasi",
-      title: "Status Diperbarui",
-      message: `Aspirasi ${aspirasiId} diubah ke "${newStatus}"`,
-      time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-      read: false,
-    }, ...notifications]);
-  };
+  const wargaTableData = useMemo(() => filteredWarga.filter((w) => wargaFilter === "Semua" || w.status === wargaFilter), [filteredWarga, wargaFilter]);
 
+  // === Kolom tabel aspirasi (TanStack Table) ===
+  const aspirasiColumns: ColumnDef<Aspirasi>[] = useMemo(() => [
+    { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="font-mono text-muted-foreground text-sm">{row.original.id}</span> },
+    { accessorKey: "judul", header: "Judul", cell: ({ row }) => <span className="font-medium text-foreground">{row.original.judul}</span> },
+    { accessorKey: "kategori", header: "Kategori", cell: ({ row }) => <Badge className="bg-primary/10 text-primary border-0 hover:bg-primary/10">{row.original.kategori}</Badge> },
+    { accessorKey: "desa", header: "Desa" },
+    { accessorKey: "tanggal", header: "Tanggal" },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge className={`border-0 hover:bg-transparent ${STATUS_COLORS[row.original.status] || ""}`}>{row.original.status}</Badge> },
+    { id: "aksi", header: "Aksi", cell: ({ row }) => (
+      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedAspirasi(row.original); }} className="hover:text-primary">
+        <IconEye className="w-4 h-4" />
+      </Button>
+    ) },
+  ], []);
+
+  // === Kolom tabel warga (TanStack Table) ===
+  const wargaColumns: ColumnDef<Warga>[] = useMemo(() => [
+    { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="font-mono text-muted-foreground text-sm">{row.original.id}</span> },
+    { accessorKey: "nama", header: "Nama", cell: ({ row }) => <span className="font-medium text-foreground">{row.original.nama}</span> },
+    { accessorKey: "nik", header: "NIK", cell: ({ row }) => <span className="font-mono text-muted-foreground text-sm">{row.original.nik}</span> },
+    { accessorKey: "desa", header: "Desa" },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge className={`border-0 hover:bg-transparent ${row.original.status === "Aktif" ? "bg-success/10 text-success" : "bg-muted/10 text-muted-foreground"}`}>{row.original.status}</Badge> },
+    { id: "aksi", header: "Aksi", cell: ({ row }) => (
+      <Button variant="ghost" size="sm" onClick={() => setSelectedWarga(row.original)} className="hover:text-primary">
+        <IconEye className="w-4 h-4" />
+      </Button>
+    ) },
+  ], []);
+
+  // === Inisialisasi TanStack Table: Aspirasi ===
+  const aspirasiTable = useReactTable({
+    data: filteredAspirasi,
+    columns: aspirasiColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    state: { globalFilter },
+    onGlobalFilterChange: setGlobalFilter,
+  });
+
+  // === Inisialisasi TanStack Table: Warga ===
+  const wargaTable = useReactTable({
+    data: wargaTableData,
+    columns: wargaColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  // === Handler: download laporan PDF ===
   const handleDownloadLaporan = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("Laporan Azelina.id", pageWidth / 2, 20, { align: "center" });
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Dicetak: ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 28, { align: "center" });
+    // Header gradient pink
+    doc.setFillColor(201, 61, 114);
+    doc.rect(0, 0, pageWidth, 40, "F");
+    doc.setFillColor(224, 114, 154);
+    doc.rect(0, 35, pageWidth, 8, "F");
 
-    let y = 40;
+    // Judul
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20); doc.setFont("helvetica", "bold");
+    doc.text("LAPORAN AZELINA.ID", pageWidth / 2, 18, { align: "center" });
+    doc.setFontSize(10); doc.setFont("helvetica", "normal");
+    doc.text("Platform E-Voting & Aspirasi Anonim", pageWidth / 2, 26, { align: "center" });
+    doc.text(`Dicetak: ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 33, { align: "center" });
 
-    doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    doc.text("Ringkasan Statistik", 14, y);
-    y += 8;
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Total Aspirasi: ${aspirasiList.length}`, 14, y); y += 6;
-    doc.text(`Diterima: ${aspirasiDiterima}  |  Diproses: ${aspirasiDiproses}  |  Selesai: ${aspirasiSelesai}`, 14, y); y += 6;
-    doc.text(`Warga Aktif: ${wargaAktif} dari ${wargaList.length}`, 14, y); y += 6;
-    doc.text(`Total Suara Voting: ${totalSuara.toLocaleString("id-ID")}`, 14, y); y += 12;
+    let y = 52;
+    doc.setTextColor(0, 0, 0);
 
-    doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    doc.text("Data Aspirasi", 14, y);
-    y += 4;
+    // Ringkasan statistik
+    doc.setFillColor(252, 228, 239);
+    doc.roundedRect(14, y, pageWidth - 28, 36, 3, 3, "F");
+    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
+    doc.text("Ringkasan Statistik", 20, y + 8);
+    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+    doc.text(`Total Aspirasi: ${aspirasiList.length}`, 20, y + 16);
+    doc.text(`Diterima: ${aspirasiDiterima}  |  Diproses: ${aspirasiDiproses}  |  Selesai: ${aspirasiSelesai}`, 20, y + 22);
+    doc.text(`Warga Aktif: ${wargaAktif} dari ${wargaList.length}`, 20, y + 28);
+    doc.text(`Total Suara Voting: ${totalSuara.toLocaleString("id-ID")}`, 20, y + 34);
+    y += 44;
 
-    autoTable(doc, {
-      startY: y,
-      head: [["ID", "Judul", "Kategori", "Desa", "Tanggal", "Status"]],
-      body: aspirasiList.map((a) => [a.id, a.judul, a.kategori, a.desa, a.tanggal, a.status]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [201, 61, 114] },
-      alternateRowStyles: { fillColor: [252, 228, 239] },
-    });
+    // Garis pemisah
+    doc.setDrawColor(201, 61, 114); doc.setLineWidth(0.5);
+    doc.line(14, y, pageWidth - 14, y); y += 8;
 
+    // Tabel Aspirasi
+    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
+    doc.text("Data Aspirasi", 14, y); y += 4;
+    autoTable(doc, { startY: y, head: [["ID", "Judul", "Kategori", "Desa", "Tanggal", "Status"]], body: aspirasiList.map((a) => [a.id, a.judul, a.kategori, a.desa, a.tanggal, a.status]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [201, 61, 114], textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [252, 228, 239] }, margin: { left: 14, right: 14 } });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
 
-    doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    doc.text("Hasil Voting", 14, y);
-    y += 4;
+    // Garis pemisah
+    doc.setDrawColor(201, 61, 114); doc.setLineWidth(0.5);
+    doc.line(14, y, pageWidth - 14, y); y += 8;
 
-    autoTable(doc, {
-      startY: y,
-      head: [["No", "Kandidat", "Visi", "Suara", "Persentase"]],
-      body: [...kandidatList]
-        .sort((a, b) => b.suara - a.suara)
-        .map((k, i) => [
-          String(i + 1),
-          k.nama,
-          k.visi.length > 50 ? k.visi.substring(0, 50) + "..." : k.visi,
-          k.suara.toLocaleString("id-ID"),
-          `${((k.suara / totalSuara) * 100).toFixed(1)}%`,
-        ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [201, 61, 114] },
-      alternateRowStyles: { fillColor: [252, 228, 239] },
-    });
+    // Tabel Voting
+    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
+    doc.text("Hasil Voting", 14, y); y += 4;
+    autoTable(doc, { startY: y, head: [["No", "Kandidat", "Visi", "Suara", "Persentase"]], body: [...kandidatList].sort((a, b) => b.suara - a.suara).map((k, i) => [String(i + 1), k.nama, k.visi.length > 50 ? k.visi.substring(0, 50) + "..." : k.visi, k.suara.toLocaleString("id-ID"), `${((k.suara / totalSuara) * 100).toFixed(1)}%`]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [201, 61, 114], textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [252, 228, 239] }, margin: { left: 14, right: 14 } });
+
+    // Footer
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFillColor(201, 61, 114);
+      doc.rect(0, doc.internal.pageSize.getHeight() - 12, pageWidth, 12, "F");
+      doc.setFontSize(8); doc.setFont("helvetica", "normal");
+      doc.setTextColor(255, 255, 255);
+      doc.text("Azelina.id - E-Voting & Aspirasi Anonim", pageWidth / 2, doc.internal.pageSize.getHeight() - 5, { align: "center" });
+    }
 
     doc.save("laporan-azelina.pdf");
   };
 
+  // === Handler: download aspirasi PDF ===
   const handleDownloadAspirasiPdf = (aspirasi: Aspirasi) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("Laporan Aspirasi", pageWidth / 2, 20, { align: "center" });
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Azelina.id - ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 28, { align: "center" });
+    // Header pink
+    doc.setFillColor(201, 61, 114);
+    doc.rect(0, 0, pageWidth, 35, "F");
+    doc.setFillColor(224, 114, 154);
+    doc.rect(0, 30, pageWidth, 8, "F");
 
-    let y = 45;
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16); doc.setFont("helvetica", "bold");
+    doc.text("LAPORAN ASPIRASI", pageWidth / 2, 14, { align: "center" });
+    doc.setFontSize(9); doc.setFont("helvetica", "normal");
+    doc.text(`Azelina.id - ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 22, { align: "center" });
+
+    let y = 48;
+    doc.setTextColor(0, 0, 0);
+
+    // Info box
+    doc.setFillColor(252, 228, 239);
+    doc.roundedRect(14, y, pageWidth - 28, 48, 3, 3, "F");
 
     const fields = [
-      { label: "ID Aspirasi", value: aspirasi.id },
-      { label: "Judul", value: aspirasi.judul },
-      { label: "Kategori", value: aspirasi.kategori },
-      { label: "Status", value: aspirasi.status },
-      { label: "Desa", value: aspirasi.desa },
-      { label: "Tanggal", value: aspirasi.tanggal },
+      { label: "ID Aspirasi", value: aspirasi.id }, { label: "Judul", value: aspirasi.judul },
+      { label: "Kategori", value: aspirasi.kategori }, { label: "Status", value: aspirasi.status },
+      { label: "Desa", value: aspirasi.desa }, { label: "Tanggal", value: aspirasi.tanggal },
     ];
-
+    let fy = y + 8;
     fields.forEach((f) => {
-      doc.setFont("helvetica", "bold");
-      doc.text(f.label + ":", 14, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(f.value, 60, y);
-      y += 8;
+      doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114); doc.text(f.label + ":", 20, fy);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60); doc.text(f.value, 55, fy);
+      fy += 6;
     });
+    y += 56;
 
-    y += 4;
-    doc.setFont("helvetica", "bold");
-    doc.text("Deskripsi:", 14, y);
-    y += 8;
-    doc.setFont("helvetica", "normal");
+    // Garis
+    doc.setDrawColor(201, 61, 114); doc.setLineWidth(0.5);
+    doc.line(14, y, pageWidth - 14, y); y += 8;
+
+    // Deskripsi
+    doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
+    doc.text("Deskripsi", 14, y); y += 6;
+    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
     const lines = doc.splitTextToSize(aspirasi.deskripsi, pageWidth - 28);
     doc.text(lines, 14, y);
+
+    // Footer
+    doc.setFillColor(201, 61, 114);
+    doc.rect(0, doc.internal.pageSize.getHeight() - 12, pageWidth, 12, "F");
+    doc.setFontSize(8); doc.setFont("helvetica", "normal");
+    doc.setTextColor(255, 255, 255);
+    doc.text("Azelina.id - E-Voting & Aspirasi Anonim", pageWidth / 2, doc.internal.pageSize.getHeight() - 5, { align: "center" });
 
     doc.save(`aspirasi-${aspirasi.id}.pdf`);
   };
 
-  return (
-    <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-border transform transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex items-center gap-3 p-6 border-b border-border">
-          <Image src="/logo-zibel.jpeg" alt="Azelina.id" width={40} height={40} className="w-10 h-10 rounded-xl object-cover border-[2.5px] border-amber-400" />
-          <div>
-            <h1 className="text-lg font-bold text-foreground">Azelina.id</h1>
-            <p className="text-xs text-primary font-semibold">Dashboard Admin</p>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden ml-auto text-muted hover:text-foreground">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  // === Handler: kirim chat ===
+  const handleSendChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim() || !selectedChatRoom) return;
+    const userTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const newMsg: ChatMessage = { id: Date.now(), sender: "petugas", name: profileName, text: chatMessage, time: userTime };
+    const currentRoom = selectedChatRoom;
+    const updatedRooms = chatRoomsList.map((room) => {
+      if (room.id === currentRoom.id) { const u = { ...room, messages: [...room.messages, newMsg], lastMessage: chatMessage, lastTime: "Sekarang" }; setSelectedChatRoom(u); return u; } return room;
+    });
+    setChatRoomsList(updatedRooms); setChatMessage("");
+  };
 
+  // === Menu sidebar ===
+  const sidebarMenu = [
+    { label: "Manajemen", items: [
+      { icon: IconChartBar, label: "Statistik", href: "#statistik" },
+      { icon: IconMessage, label: "Kelola Aspirasi", href: "#aspirasi" },
+      { icon: IconClipboardList, label: "Kelola Voting", href: "#voting" },
+      { icon: IconUsers, label: "Kelola Warga", href: "#warga" },
+      { icon: IconWorld, label: "Papan Publik", href: "#papan" },
+    ]},
+    { label: "Komunikasi", items: [{ icon: IconHeadphones, label: "Chat Warga", href: "#chat" }] },
+    { label: "Pengaturan", items: [
+      { icon: IconUser, label: "Profil Saya", href: "#profil" },
+      { icon: IconLock, label: "Ganti Kata Sandi", href: "#sandi" },
+      { icon: IconLogout, label: "Keluar", href: "/login" },
+    ]},
+  ];
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* === Sidebar admin === */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-border transform transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex items-center gap-3 px-5 h-16 border-b border-border flex-shrink-0">
+          <Image src="/logo-zibel.jpeg" alt="Azelina.id" width={40} height={40} className="w-10 h-10 rounded-xl object-cover border-[2.5px] border-amber-400" />
+          <div><h1 className="text-lg font-bold text-foreground">Azelina.id</h1><p className="text-xs text-primary font-semibold">Dashboard Admin</p></div>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden ml-auto text-muted-foreground hover:text-foreground"><IconX className="w-5 h-5" /></button>
+        </div>
         <nav className="p-4 space-y-6">
           {sidebarMenu.map((group) => (
             <div key={group.label}>
-              <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 px-3">{group.label}</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">{group.label}</p>
               <div className="space-y-1">
                 {group.items.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    onClick={(e) => {
-                      if (item.href.startsWith("#")) {
-                        e.preventDefault();
-                        setActiveSection(item.href.replace("#", ""));
-                        setSidebarOpen(false);
-                      }
-                      if (item.label === "Keluar") {
-                        window.location.href = item.href;
-                      }
-                    }}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                      activeSection === item.href.replace("#", "")
-                        ? "bg-primary text-white shadow-sm"
-                        : "text-muted hover:text-foreground hover:bg-accent-light/50"
-                    }`}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    {item.label}
+                  <a key={item.label} href={item.href} onClick={(e) => { if (item.href.startsWith("#")) { e.preventDefault(); setActiveSection(item.href.replace("#", "")); setSidebarOpen(false); } if (item.label === "Keluar") window.location.href = item.href; }}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === item.href.replace("#", "") ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent-light/50"}`}>
+                    <item.icon className="w-5 h-5" />{item.label}
                   </a>
                 ))}
               </div>
@@ -417,1670 +526,628 @@ export default function AdminDashboardPage() {
         </nav>
       </aside>
 
-      {/* Overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-border">
-          <div className="flex items-center justify-between px-6 py-4">
+      {/* === Konten utama === */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top bar */}
+        <header className="flex-shrink-0 z-30 bg-white border-b border-border h-16 flex items-center">
+          <div className="flex items-center justify-between w-full px-6">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted hover:text-foreground">
-                <Menu className="w-6 h-6" />
-              </button>
-              <div>
-                <h2 className="text-lg font-bold text-foreground">Selamat Datang, Admin!</h2>
-                <p className="text-sm text-muted">Kelola platform Azelina.id</p>
-              </div>
+              <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-foreground"><IconMenu className="w-6 h-6" /></button>
+              <div><h2 className="text-lg font-bold text-foreground">Selamat Datang, Admin!</h2><p className="text-sm text-muted-foreground">Kelola platform Azelina.id</p></div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Notifikasi */}
               <div className="relative">
-                <button
-                  onClick={() => setShowNotif(!showNotif)}
-                  className="relative p-2 rounded-xl hover:bg-accent-light/50 transition-colors"
-                >
-                  <Bell className="w-5 h-5 text-muted" />
-                  {notifications.filter((n) => !n.read).length > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {notifications.filter((n) => !n.read).length}
-                    </span>
-                  )}
+                <button onClick={() => setShowNotif(!showNotif)} className="relative p-2 rounded-xl hover:bg-accent-light/50 transition-colors">
+                  <IconBell className="w-5 h-5 text-muted-foreground" />
+                  {notifications.filter((n) => !n.read).length > 0 && <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">{notifications.filter((n) => !n.read).length}</span>}
                 </button>
                 {showNotif && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-border z-50">
                     <div className="p-4 border-b border-border flex items-center justify-between">
                       <h4 className="font-semibold text-foreground">Notifikasi</h4>
-                      {notifications.length > 0 && (
-                        <button
-                          onClick={() => setNotifications(notifications.map((n) => ({ ...n, read: true })))}
-                          className="text-xs text-primary hover:text-primary-dark font-medium"
-                        >
-                          Tandai semua dibaca
-                        </button>
-                      )}
+                      {notifications.length > 0 && <button onClick={() => setNotifications(notifications.map((n) => ({ ...n, read: true })))} className="text-xs text-primary hover:text-primary-dark font-medium">Tandai semua dibaca</button>}
                     </div>
-                    <div className="max-h-80 overflow-y-auto">
+                    <ScrollArea className="max-h-80">
                       {notifications.length === 0 ? (
-                        <div className="p-6 text-center">
-                          <Bell className="w-10 h-10 text-muted/30 mx-auto mb-2" />
-                          <p className="text-sm text-muted">Belum ada notifikasi</p>
-                        </div>
+                        <div className="p-6 text-center"><IconBell className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" /><p className="text-sm text-muted-foreground">Belum ada notifikasi</p></div>
                       ) : (
                         <div className="divide-y divide-border">
                           {notifications.map((item) => (
-                            <div
-                              key={item.id}
-                              onClick={() => setNotifications(notifications.map((n) => n.id === item.id ? { ...n, read: true } : n))}
-                              className={`p-4 hover:bg-accent-light/30 transition-colors cursor-pointer ${!item.read ? "bg-primary/5" : ""}`}
-                            >
+                            <div key={item.id} onClick={() => setNotifications(notifications.map((n) => n.id === item.id ? { ...n, read: true } : n))} className={`p-4 hover:bg-accent-light/30 transition-colors cursor-pointer ${!item.read ? "bg-primary/5" : ""}`}>
                               <div className="flex items-start gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.type === "aspirasi" ? "bg-primary/10" : "bg-success/10"}`}>
-                                  {item.type === "aspirasi" ? (
-                                    <MessageSquare className="w-4 h-4 text-primary" />
-                                  ) : (
-                                    <Headphones className="w-4 h-4 text-success" />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground">{item.title}</p>
-                                  <p className="text-xs text-muted mt-0.5 truncate">{item.message}</p>
-                                  <p className="text-xs text-muted mt-1">{item.time}</p>
-                                </div>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.type === "aspirasi" ? "bg-primary/10" : "bg-success/10"}`}>{item.type === "aspirasi" ? <IconMessage className="w-4 h-4 text-primary" /> : <IconHeadphones className="w-4 h-4 text-success" />}</div>
+                                <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground">{item.title}</p><p className="text-xs text-muted-foreground mt-0.5 truncate">{item.message}</p><p className="text-xs text-muted-foreground mt-1">{item.time}</p></div>
                                 {!item.read && <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-2" />}
                               </div>
                             </div>
                           ))}
                         </div>
                       )}
-                    </div>
+                    </ScrollArea>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Settings className="w-5 h-5 text-primary" />
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-semibold text-foreground">{profileName}</p>
-                  <p className="text-xs text-primary font-medium">Administrator</p>
-                </div>
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center"><IconSettings className="w-5 h-5 text-primary" /></div>
+                <div className="hidden sm:block"><p className="text-sm font-semibold text-foreground">{profileName}</p><p className="text-xs text-primary font-medium">Administrator</p></div>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 p-6">
-          {/* Stats */}
+        <main className="flex-1 p-6 overflow-y-auto">
+          {/* === Statistik ringkas === */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div onClick={() => setStatBubbleModal("aspirasi")} className="stat-card rounded-xl p-5 border-2 border-amber-300 hover:bg-accent-light hover:border-primary transition-all cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                  <MessageSquare className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{aspirasiList.length}</p>
-                  <p className="text-xs text-muted group-hover:text-primary transition-colors">Total Aspirasi</p>
-                </div>
-              </div>
-            </div>
-            <div onClick={() => setStatBubbleModal("warga")} className="stat-card rounded-xl p-5 border-2 border-amber-300 hover:bg-accent-light hover:border-primary transition-all cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                  <Users className="w-5 h-5 text-primary-light group-hover:text-primary transition-colors" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{wargaAktif}</p>
-                  <p className="text-xs text-muted group-hover:text-primary transition-colors">Warga Aktif</p>
-                </div>
-              </div>
-            </div>
-            <div onClick={() => setStatBubbleModal("suara")} className="stat-card rounded-xl p-5 border-2 border-amber-300 hover:bg-accent-light hover:border-primary transition-all cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                  <Vote className="w-5 h-5 text-success group-hover:text-primary transition-colors" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{totalSuara.toLocaleString("id-ID")}</p>
-                  <p className="text-xs text-muted group-hover:text-primary transition-colors">Total Suara</p>
-                </div>
-              </div>
-            </div>
-            <div onClick={() => setStatBubbleModal("selesai")} className="stat-card rounded-xl p-5 border-2 border-amber-300 hover:bg-accent-light hover:border-primary transition-all cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{aspirasiSelesai}</p>
-                  <p className="text-xs text-muted group-hover:text-primary transition-colors">Aspirasi Selesai</p>
-                </div>
-              </div>
-            </div>
+            {[
+              { onClick: () => setStatBubbleModal("aspirasi"), value: aspirasiList.length, label: "Total Aspirasi", icon: IconMessage, color: "text-primary" },
+              { onClick: () => setStatBubbleModal("warga"), value: wargaAktif, label: "Warga Aktif", icon: IconUsers, color: "text-primary-light" },
+              { onClick: () => setStatBubbleModal("suara"), value: totalSuara.toLocaleString("id-ID"), label: "Total Suara", icon: IconClipboardList, color: "text-success" },
+              { onClick: () => setStatBubbleModal("selesai"), value: aspirasiSelesai, label: "Aspirasi Selesai", icon: IconTrendingUp, color: "text-primary" },
+            ].map((stat) => (
+              <Card key={stat.label} onClick={stat.onClick} className="stat-card border-2 border-amber-300 hover:bg-accent-light hover:border-primary transition-all cursor-pointer group">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors"><stat.icon className={`w-5 h-5 ${stat.color} group-hover:text-primary transition-colors`} /></div>
+                    <div><p className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{stat.value}</p><p className="text-xs text-muted-foreground group-hover:text-primary transition-colors">{stat.label}</p></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
-          {/* Statistik Section */}
+          {/* === Section: Statistik === */}
           {activeSection === "statistik" && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-foreground">Statistik Platform</h3>
               <div className="grid md:grid-cols-2 gap-6">
-                {/* Aspirasi per Status */}
-                <div className="bg-white rounded-xl border border-border p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <PieChart className="w-5 h-5 text-primary" />
-                    <h4 className="font-semibold text-foreground">Aspirasi per Status</h4>
-                  </div>
+                {/* Aspirasi per status */}
+                <Card className="border-border"><CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4"><IconChartPie className="w-5 h-5 text-primary" /><h4 className="font-semibold text-foreground">Aspirasi per Status</h4></div>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-primary/20" />
-                        <span className="text-sm text-muted">Diterima</span>
+                    {[
+                      { label: "Diterima", count: aspirasiDiterima, color: "bg-primary/40" },
+                      { label: "Diproses", count: aspirasiDiproses, color: "bg-primary" },
+                      { label: "Selesai", count: aspirasiSelesai, color: "bg-success" },
+                    ].map((s) => (
+                      <div key={s.label}>
+                        <div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className={`w-3 h-3 rounded-full ${s.color}`} /><span className="text-sm text-muted-foreground">{s.label}</span></div><span className="text-sm font-bold text-foreground">{s.count}</span></div>
+                        <div className="w-full bg-accent-light rounded-full h-2 mt-1"><div className={`${s.color} rounded-full h-2`} style={{ width: `${(s.count / aspirasiList.length) * 100}%` }} /></div>
                       </div>
-                      <span className="text-sm font-bold text-foreground">{aspirasiDiterima}</span>
-                    </div>
-                    <div className="w-full bg-accent-light rounded-full h-2">
-                      <div className="bg-primary/40 rounded-full h-2" style={{ width: `${(aspirasiDiterima / aspirasiList.length) * 100}%` }} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-primary" />
-                        <span className="text-sm text-muted">Diproses</span>
-                      </div>
-                      <span className="text-sm font-bold text-foreground">{aspirasiDiproses}</span>
-                    </div>
-                    <div className="w-full bg-accent-light rounded-full h-2">
-                      <div className="bg-primary rounded-full h-2" style={{ width: `${(aspirasiDiproses / aspirasiList.length) * 100}%` }} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-success" />
-                        <span className="text-sm text-muted">Selesai</span>
-                      </div>
-                      <span className="text-sm font-bold text-foreground">{aspirasiSelesai}</span>
-                    </div>
-                    <div className="w-full bg-accent-light rounded-full h-2">
-                      <div className="bg-success rounded-full h-2" style={{ width: `${(aspirasiSelesai / aspirasiList.length) * 100}%` }} />
-                    </div>
+                    ))}
                   </div>
-                </div>
+                </CardContent></Card>
 
-                {/* Hasil Voting */}
-                <div onClick={() => setStatModal("voting")} className="bg-white rounded-xl border border-border p-6 hover:shadow-lg hover:border-accent transition-all cursor-pointer">
-                  <div className="flex items-center gap-2 mb-4">
-                    <BarChart3 className="w-5 h-5 text-primary" />
-                    <h4 className="font-semibold text-foreground">Hasil Voting Real-time</h4>
-                    <Eye className="w-4 h-4 text-muted ml-auto" />
-                  </div>
+                {/* Hasil voting */}
+                <Card onClick={() => setStatModal("voting")} className="border-border hover:shadow-lg hover:border-accent transition-all cursor-pointer"><CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4"><IconChartBar className="w-5 h-5 text-primary" /><h4 className="font-semibold text-foreground">Hasil Voting Real-time</h4><IconEye className="w-4 h-4 text-muted-foreground ml-auto" /></div>
                   <div className="space-y-4">
-                    {kandidatList.map((kandidat) => (
-                      <div key={kandidat.id}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{kandidat.foto}</span>
-                            <span className="text-sm font-medium text-foreground">{kandidat.nama}</span>
-                          </div>
-                          <span className="text-sm font-bold text-primary">{kandidat.suara.toLocaleString("id-ID")}</span>
-                        </div>
-                        <div className="w-full bg-accent-light rounded-full h-3">
-                          <div
-                            className="bg-primary rounded-full h-3 transition-all"
-                            style={{ width: `${(kandidat.suara / totalSuara) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-muted mt-1 text-right">{((kandidat.suara / totalSuara) * 100).toFixed(1)}%</p>
+                    {kandidatList.map((k) => (
+                      <div key={k.id}>
+                        <div className="flex items-center justify-between mb-1"><div className="flex items-center gap-2"><span className="text-lg">{k.foto}</span><span className="text-sm font-medium text-foreground">{k.nama}</span></div><span className="text-sm font-bold text-primary">{k.suara.toLocaleString("id-ID")}</span></div>
+                        <div className="w-full bg-accent-light rounded-full h-3"><div className="bg-primary rounded-full h-3 transition-all" style={{ width: `${(k.suara / totalSuara) * 100}%` }} /></div>
+                        <p className="text-xs text-muted-foreground mt-1 text-right">{((k.suara / totalSuara) * 100).toFixed(1)}%</p>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted">Total Suara Masuk</span>
-                      <span className="text-lg font-bold text-foreground">{totalSuara.toLocaleString("id-ID")}</span>
-                    </div>
-                  </div>
-                </div>
+                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between"><span className="text-sm text-muted-foreground">Total Suara Masuk</span><span className="text-lg font-bold text-foreground">{totalSuara.toLocaleString("id-ID")}</span></div>
+                </CardContent></Card>
 
-                {/* Aspirasi Terbaru */}
-                <div onClick={() => setStatModal("aspirasi-terbaru")} className="bg-white rounded-xl border border-border p-6 hover:shadow-lg hover:border-accent transition-all cursor-pointer">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FileText className="w-5 h-5 text-primary" />
-                    <h4 className="font-semibold text-foreground">Aspirasi Terbaru</h4>
-                    <Eye className="w-4 h-4 text-muted ml-auto" />
-                  </div>
+                {/* Aspirasi terbaru */}
+                <Card onClick={() => setStatModal("aspirasi-terbaru")} className="border-border hover:shadow-lg hover:border-accent transition-all cursor-pointer"><CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4"><IconFileText className="w-5 h-5 text-primary" /><h4 className="font-semibold text-foreground">Aspirasi Terbaru</h4><IconEye className="w-4 h-4 text-muted-foreground ml-auto" /></div>
                   <div className="space-y-3">
-                    {aspirasiList.slice(0, 4).map((item) => {
-                      const statusColor: Record<string, string> = {
-                        Diproses: "bg-primary/10 text-primary",
-                        Diterima: "bg-accent-light text-primary-dark",
-                        Selesai: "bg-success/10 text-success",
-                      };
-                      return (
-                        <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-accent-light/30">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{item.judul}</p>
-                            <p className="text-xs text-muted">{item.desa} &bull; {item.tanggal}</p>
-                          </div>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${statusColor[item.status] || ""}`}>{item.status}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Kandidat Terpopuler */}
-                <div onClick={() => setStatModal("kandidat")} className="bg-white rounded-xl border border-border p-6 hover:shadow-lg hover:border-accent transition-all cursor-pointer">
-                  <div className="flex items-center gap-2 mb-4">
-                    <TrendingUp className="w-5 h-5 text-primary" />
-                    <h4 className="font-semibold text-foreground">Kandidat Terpopuler</h4>
-                    <Eye className="w-4 h-4 text-muted ml-auto" />
-                  </div>
-                  <div className="space-y-3">
-                    {[...kandidatList].sort((a, b) => b.suara - a.suara).map((kandidat, index) => (
-                      <div key={kandidat.id} className="flex items-center gap-3 p-3 rounded-xl bg-accent-light/30">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${index === 0 ? "bg-primary text-white" : "bg-accent-light text-primary"}`}>
-                          {index + 1}
-                        </div>
-                        <span className="text-lg">{kandidat.foto}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground">{kandidat.nama}</p>
-                          <p className="text-xs text-muted">{kandidat.suara.toLocaleString("id-ID")} suara</p>
-                        </div>
-                        <span className="text-sm font-bold text-primary">{((kandidat.suara / totalSuara) * 100).toFixed(1)}%</span>
+                    {aspirasiList.slice(0, 4).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-accent-light/30">
+                        <div className="min-w-0"><p className="text-sm font-medium text-foreground truncate">{item.judul}</p><p className="text-xs text-muted-foreground">{item.desa} &bull; {item.tanggal}</p></div>
+                        <Badge className={`border-0 hover:bg-transparent flex-shrink-0 ml-2 ${STATUS_COLORS[item.status] || ""}`}>{item.status}</Badge>
                       </div>
                     ))}
                   </div>
-                </div>
+                </CardContent></Card>
+
+                {/* Kandidat terpopuler */}
+                <Card onClick={() => setStatModal("kandidat")} className="border-border hover:shadow-lg hover:border-accent transition-all cursor-pointer"><CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4"><IconTrendingUp className="w-5 h-5 text-primary" /><h4 className="font-semibold text-foreground">Kandidat Terpopuler</h4><IconEye className="w-4 h-4 text-muted-foreground ml-auto" /></div>
+                  <div className="space-y-3">
+                    {[...kandidatList].sort((a, b) => b.suara - a.suara).map((k, i) => (
+                      <div key={k.id} className="flex items-center gap-3 p-3 rounded-xl bg-accent-light/30">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${i === 0 ? "bg-primary text-white" : "bg-accent-light text-primary"}`}>{i + 1}</div>
+                        <span className="text-lg">{k.foto}</span>
+                        <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground">{k.nama}</p><p className="text-xs text-muted-foreground">{k.suara.toLocaleString("id-ID")} suara</p></div>
+                        <span className="text-sm font-bold text-primary">{((k.suara / totalSuara) * 100).toFixed(1)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent></Card>
               </div>
             </div>
           )}
 
-          {/* Kelola Aspirasi Section */}
+          {/* === Section: Kelola Aspirasi === */}
           {activeSection === "aspirasi" && (
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <h3 className="text-xl font-bold text-foreground">Kelola Aspirasi</h3>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {["Semua", "Diterima", "Diproses", "Selesai"].map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setAspirasiFilter(filter)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        aspirasiFilter === filter
-                          ? "bg-primary text-white shadow-sm"
-                          : "bg-white text-muted border border-border hover:border-accent"
-                      }`}
-                    >
-                      {filter}
-                    </button>
+                  {["Semua", "Diterima", "Diproses", "Selesai"].map((f) => (
+                    <Button key={f} variant={aspirasiFilter === f ? "default" : "outline"} onClick={() => setAspirasiFilter(f)}
+                      className={aspirasiFilter === f ? "bg-primary text-white shadow-sm" : "border-border"}>
+                      {f}
+                    </Button>
                   ))}
                 </div>
               </div>
-
-              {/* Date Filter */}
+              {/* Filter tanggal */}
               <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-muted">Dari:</span>
-                  <input
-                    type="date"
-                    value={aspirasiDateStart}
-                    onChange={(e) => setAspirasiDateStart(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-border text-sm text-foreground focus:outline-none input-focus"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-muted">Sampai:</span>
-                  <input
-                    type="date"
-                    value={aspirasiDateEnd}
-                    onChange={(e) => setAspirasiDateEnd(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-border text-sm text-foreground focus:outline-none input-focus"
-                  />
-                </div>
-                {(aspirasiDateStart || aspirasiDateEnd) && (
-                  <button
-                    onClick={() => { setAspirasiDateStart(""); setAspirasiDateEnd(""); }}
-                    className="text-xs font-medium text-primary hover:text-primary-dark transition-colors"
-                  >
-                    Reset Tanggal
-                  </button>
-                )}
+                <div className="flex items-center gap-2"><span className="text-sm font-medium text-muted-foreground">Dari:</span><Input type="date" value={aspirasiDateStart} onChange={(e) => setAspirasiDateStart(e.target.value)} className="w-40 input-focus" /></div>
+                <div className="flex items-center gap-2"><span className="text-sm font-medium text-muted-foreground">Sampai:</span><Input type="date" value={aspirasiDateEnd} onChange={(e) => setAspirasiDateEnd(e.target.value)} className="w-40 input-focus" /></div>
+                {(aspirasiDateStart || aspirasiDateEnd) && <Button variant="ghost" onClick={() => { setAspirasiDateStart(""); setAspirasiDateEnd(""); }} className="text-xs text-primary hover:text-primary-dark">Reset Tanggal</Button>}
               </div>
-
-              <div className="bg-white rounded-xl border border-border">
+              {/* Tabel aspirasi TanStack Table */}
+              <Card className="border-border">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">ID</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Judul</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Kategori</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Desa</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Tanggal</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Status</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {filteredAspirasi.map((item) => {
-                        const statusColor: Record<string, string> = {
-                          Diproses: "bg-primary/10 text-primary",
-                          Diterima: "bg-accent-light text-primary-dark",
-                          Selesai: "bg-success/10 text-success",
-                        };
-                        return (
-                          <tr key={item.id} onClick={() => setSelectedAspirasi(item)} className="hover:bg-accent-light/20 transition-colors cursor-pointer">
-                            <td className="px-6 py-4 text-sm font-mono text-muted">{item.id}</td>
-                            <td className="px-6 py-4 text-sm font-medium text-foreground">{item.judul}</td>
-                            <td className="px-6 py-4"><span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">{item.kategori}</span></td>
-                            <td className="px-6 py-4 text-sm text-muted">{item.desa}</td>
-                            <td className="px-6 py-4 text-sm text-muted">{item.tanggal}</td>
-                            <td className="px-6 py-4">
-                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor[item.status] || ""}`}>{item.status}</span>
-                            </td>
-                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                              <select
-                                value={item.status}
-                                onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                                className="text-xs px-2 py-1 rounded-lg border border-border text-foreground focus:outline-none input-focus"
-                              >
-                                <option value="Diterima">Diterima</option>
-                                <option value="Diproses">Diproses</option>
-                                <option value="Selesai">Selesai</option>
-                              </select>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <Table>
+                    <TableHeader>
+                      {aspirasiTable.getHeaderGroups().map((hg) => (
+                        <TableRow key={hg.id}>
+                          {hg.headers.map((h) => <TableHead key={h.id} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}</TableHead>)}
+                        </TableRow>
+                      ))}
+                    </TableHeader>
+                    <TableBody>
+                      {aspirasiTable.getRowModel().rows.length === 0 ? (
+                        <TableRow><TableCell colSpan={aspirasiColumns.length} className="text-center py-8"><IconMessage className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" /><p className="text-muted-foreground">Tidak ada aspirasi</p></TableCell></TableRow>
+                      ) : aspirasiTable.getRowModel().rows.map((row) => (
+                        <TableRow key={row.id} onClick={() => setSelectedAspirasi(row.original)} className="hover:bg-accent-light/20 transition-colors cursor-pointer">
+                          {row.getVisibleCells().map((cell) => <TableCell key={cell.id} onClick={(e) => { if (cell.column.id === "aksi") e.stopPropagation(); }} className="px-6 py-4">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-                {filteredAspirasi.length === 0 && (
-                  <div className="text-center py-8">
-                    <MessageSquare className="w-12 h-12 text-muted/30 mx-auto mb-3" />
-                    <p className="text-muted">Tidak ada aspirasi yang cocok dengan filter</p>
-                  </div>
-                )}
-              </div>
+              </Card>
             </div>
           )}
 
-          {/* Kelola Voting Section */}
+          {/* === Section: Kelola Voting === */}
           {activeSection === "voting" && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-foreground">Kelola Voting</h3>
-                <button
-                  onClick={() => setShowFormKandidat(true)}
-                  className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors shadow-sm"
-                >
-                  <User className="w-4 h-4" />
-                  Tambah Kandidat
-                </button>
+                <Button onClick={() => setShowFormKandidat(true)} className="bg-primary text-white hover:bg-primary-dark shadow-sm"><IconUser className="w-4 h-4 mr-2" /> Tambah Kandidat</Button>
               </div>
-              <div className="bg-white rounded-xl border border-border p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <Vote className="w-5 h-5 text-primary" />
-                  <h4 className="font-semibold text-foreground">Pemilihan Kepala Desa 2026</h4>
-                  <span className="text-xs px-2.5 py-1 bg-success/10 text-success rounded-full font-medium ml-auto">Aktif</span>
-                </div>
-                <div className="grid md:grid-cols-3 gap-4">
-                  {kandidatList.map((kandidat) => (
-                    <div
-                      key={kandidat.id}
-                      onClick={() => setSelectedKandidatDetail(kandidat)}
-                      className="p-5 rounded-xl border-2 border-border hover:border-accent transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center justify-end gap-1 mb-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditKandidatId(kandidat.id);
-                            setFormKandidatNama(kandidat.nama);
-                            setFormKandidatVisi(kandidat.visi);
-                            setFormKandidatFoto(kandidat.foto);
-                            setShowEditKandidat(true);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
-                          title="Edit Kandidat"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(`Hapus kandidat ${kandidat.nama}?`)) {
-                              setKandidatList(kandidatList.filter((k) => k.id !== kandidat.id));
-                              setNotifications([{
-                                id: Date.now(),
-                                type: "aspirasi",
-                                title: "Kandidat Dihapus",
-                                message: `${kandidat.nama} telah dihapus dari daftar kandidat`,
-                                time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-                                read: false,
-                              }, ...notifications]);
-                            }
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted hover:text-red-500 transition-colors"
-                          title="Hapus Kandidat"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+              <Card className="border-border">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <IconClipboardList className="w-5 h-5 text-primary" /><h4 className="font-semibold text-foreground">Pemilihan Kepala Desa 2026</h4>
+                    <Badge className="bg-success/10 text-success border-0 hover:bg-success/10 ml-auto">Aktif</Badge>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {kandidatList.map((k) => (
+                      <div key={k.id} onClick={() => setSelectedKandidatDetail(k)} className="p-5 rounded-xl border-2 border-border hover:border-accent transition-all cursor-pointer">
+                        <div className="flex items-center justify-end gap-1 mb-2">
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditKandidatId(k.id); setFormKandidatNama(k.nama); setFormKandidatVisi(k.visi); setFormKandidatFoto(k.foto); setShowEditKandidat(true); }} className="hover:text-primary"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></Button>
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); if (confirm(`Hapus kandidat ${k.nama}?`)) { setKandidatList(kandidatList.filter((x) => x.id !== k.id)); setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Dihapus", message: `${k.nama} telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); } }} className="hover:text-red-500"><IconTrash className="w-4 h-4" /></Button>
+                        </div>
+                        <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center mx-auto mb-3 text-3xl">{k.foto}</div>
+                        <h5 className="font-bold text-foreground text-center mb-1">{k.nama}</h5>
+                        <p className="text-xs text-muted-foreground text-center leading-relaxed mb-3">{k.visi}</p>
+                        <div className="text-center"><span className="text-2xl font-bold text-primary">{k.suara.toLocaleString("id-ID")}</span><p className="text-xs text-muted-foreground">suara</p></div>
                       </div>
-                      <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center mx-auto mb-3 text-3xl">
-                        {kandidat.foto}
-                      </div>
-                      <h5 className="font-bold text-foreground text-center mb-1">{kandidat.nama}</h5>
-                      <p className="text-xs text-muted text-center leading-relaxed mb-3">{kandidat.visi}</p>
-                      <div className="text-center">
-                        <span className="text-2xl font-bold text-primary">{kandidat.suara.toLocaleString("id-ID")}</span>
-                        <p className="text-xs text-muted">suara</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 
-          {/* Kelola Warga Section */}
+          {/* === Section: Kelola Warga === */}
           {activeSection === "warga" && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-foreground">Kelola Warga</h3>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={wargaSearch}
-                    onChange={(e) => setWargaSearch(e.target.value)}
-                    placeholder="Cari warga..."
-                    className="w-64 px-4 py-2.5 rounded-xl border border-border text-sm text-foreground placeholder:text-muted/50 focus:outline-none input-focus"
-                  />
-                </div>
+                <Input value={wargaSearch} onChange={(e) => setWargaSearch(e.target.value)} placeholder="Cari warga..." className="w-64 input-focus" />
               </div>
-
-              {/* Tab Filter */}
-              <div className="flex bg-white rounded-xl p-1.5 shadow-sm border border-border">
-                {["Semua", "Aktif", "Tidak Aktif"].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setWargaFilter(tab)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
-                      wargaFilter === tab
-                        ? "tab-active shadow-md"
-                        : "text-muted hover:text-foreground hover:bg-accent-light/50"
-                    }`}
-                  >
-                    {tab}
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${wargaFilter === tab ? "bg-white/20" : "bg-accent-light"}`}>
-                      {tab === "Semua" ? wargaList.length : wargaList.filter((w) => w.status === (tab === "Aktif" ? "Aktif" : "Tidak Aktif")).length}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="bg-white rounded-xl border border-border">
+              {/* Tab filter */}
+              <Tabs value={wargaFilter} onValueChange={setWargaFilter}>
+                <TabsList className="bg-white p-1.5 shadow-sm border border-border h-auto w-full max-w-md">
+                  {["Semua", "Aktif", "Tidak Aktif"].map((tab) => (
+                    <TabsTrigger key={tab} value={tab} className="flex-1 data-[state=active]:tab-active data-[state=active]:shadow-md">
+                      {tab}
+                      <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${wargaFilter === tab ? "bg-white/20" : "bg-accent-light"}`}>
+                        {tab === "Semua" ? wargaList.length : wargaList.filter((w) => w.status === (tab === "Aktif" ? "Aktif" : "Tidak Aktif")).length}
+                      </span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              {/* Tabel warga TanStack Table */}
+              <Card className="border-border">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">ID</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Nama</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">NIK</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Desa</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Status</th>
-                        <th className="text-left text-xs font-semibold text-muted uppercase tracking-wider px-6 py-4">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {filteredWarga.filter((w) => wargaFilter === "Semua" || w.status === wargaFilter).map((item) => (
-                        <tr key={item.id} className="hover:bg-accent-light/20 transition-colors">
-                          <td className="px-6 py-4 text-sm font-mono text-muted">{item.id}</td>
-                          <td className="px-6 py-4 text-sm font-medium text-foreground">{item.nama}</td>
-                          <td className="px-6 py-4 text-sm font-mono text-muted">{item.nik}</td>
-                          <td className="px-6 py-4 text-sm text-muted">{item.desa}</td>
-                          <td className="px-6 py-4">
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${item.status === "Aktif" ? "bg-success/10 text-success" : "bg-muted/10 text-muted"}`}>{item.status}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <button onClick={() => setSelectedWarga(item)} className="p-1.5 rounded-lg hover:bg-accent-light text-muted hover:text-primary transition-colors">
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
+                  <Table>
+                    <TableHeader>
+                      {wargaTable.getHeaderGroups().map((hg) => (
+                        <TableRow key={hg.id}>
+                          {hg.headers.map((h) => <TableHead key={h.id} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}</TableHead>)}
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableHeader>
+                    <TableBody>
+                      {wargaTable.getRowModel().rows.length === 0 ? (
+                        <TableRow><TableCell colSpan={wargaColumns.length} className="text-center py-8"><IconUsers className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" /><p className="text-muted-foreground">Tidak ada warga</p></TableCell></TableRow>
+                      ) : wargaTable.getRowModel().rows.map((row) => (
+                        <TableRow key={row.id} className="hover:bg-accent-light/20 transition-colors">
+                          {row.getVisibleCells().map((cell) => <TableCell key={cell.id} className="px-6 py-4">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-                {filteredWarga.filter((w) => wargaFilter === "Semua" || w.status === wargaFilter).length === 0 && (
-                  <div className="text-center py-8">
-                    <Users className="w-12 h-12 text-muted/30 mx-auto mb-3" />
-                    <p className="text-muted">Tidak ada warga dengan status &quot;{wargaFilter}&quot;</p>
-                  </div>
-                )}
-              </div>
+              </Card>
             </div>
           )}
 
-          {/* Papan Publik Section */}
+          {/* === Section: Papan Publik === */}
           {activeSection === "papan" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Papan Publik</h3>
-                  <p className="text-sm text-muted">Kelola aspirasi publik yang tampil untuk warga</p>
-                </div>
-              </div>
+              <div><h3 className="text-xl font-bold text-foreground">Papan Publik</h3><p className="text-sm text-muted-foreground">Kelola aspirasi publik yang tampil untuk warga</p></div>
               <div className="grid md:grid-cols-2 gap-4">
-                {[
-                  { id: 1, desa: "Desa Batu Ampar", judul: "Perbaikan Jalan Rusak di RT 05", kategori: "Infrastruktur", votes: 234, status: "Aktif", waktu: "2 jam lalu", deskripsi: "Jalan di RT 05 mengalami kerusakan parah akibat hujan deras." },
-                  { id: 2, desa: "Desa Sempaja", judul: "Distribusi Air Bersih untuk Warga", kategori: "Pelayanan", votes: 189, status: "Aktif", waktu: "5 jam lalu", deskripsi: "Beberapa RT di Desa Sempaja masih mengalami kekurangan air bersih." },
-                  { id: 3, desa: "Desa Prapatan", judul: "Penerangan Jalan Umum Mati", kategori: "Keamanan", votes: 156, status: "Aktif", waktu: "1 hari lalu", deskripsi: "Lampu penerangan jalan di Jl. Prapatan sudah mati selama 2 minggu." },
-                  { id: 4, desa: "Desa Klandasan", judul: "Fasilitas Posyandu yang Layak", kategori: "Kesehatan", votes: 142, status: "Aktif", waktu: "1 hari lalu", deskripsi: "Posyandu di Desa Klandasan membutuhkan perbaikan fasilitas." },
-                  { id: 5, desa: "Desa Damai", judul: "Pembangunan Trotoar Pejalan Kaki", kategori: "Infrastruktur", votes: 128, status: "Selesai", waktu: "2 hari lalu", deskripsi: "Warga mengusulkan pembangunan trotoar di Jl. Damai." },
-                  { id: 6, desa: "Desa Manggar", judul: "Pengadaan Sampah Organik", kategori: "Lingkungan", votes: 98, status: "Aktif", waktu: "3 hari lalu", deskripsi: "Sampah organik di Desa Manggar belum ditangani dengan baik." },
-                ].map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelectedPapanPublik(item)}
-                    className="bg-white rounded-xl border border-border p-5 hover:border-accent hover:shadow-md transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {item.desa}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">{item.kategori}</span>
+                {papanPublikData.map((item) => (
+                  <Card key={item.id} onClick={() => setSelectedPapanPublik(item)} className="border-border hover:border-accent hover:shadow-md transition-all cursor-pointer">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1"><IconMapPin className="w-3 h-3" />{item.desa}</span>
+                          <Badge className="bg-primary/10 text-primary border-0 hover:bg-primary/10">{item.kategori}</Badge>
+                        </div>
+                        <Badge className={`border-0 hover:bg-transparent ${item.status === "Aktif" ? "bg-primary/10 text-primary" : "bg-success/10 text-success"}`}>{item.status}</Badge>
                       </div>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.status === "Aktif" ? "bg-primary/10 text-primary" : "bg-success/10 text-success"}`}>{item.status}</span>
-                    </div>
-                    <h5 className="font-semibold text-foreground mb-3">{item.judul}</h5>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-muted flex items-center gap-1">
-                          <Vote className="w-4 h-4" />
-                          {papanVotes[item.id] || item.votes} suara
-                        </span>
-                        <span className="text-xs text-muted">{item.waktu}</span>
+                      <h5 className="font-semibold text-foreground mb-3">{item.judul}</h5>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground flex items-center gap-1"><IconClipboardList className="w-4 h-4" />{papanVotes[item.id] || item.votes} suara</span>
+                        <span className="text-xs text-muted-foreground">{item.waktu}</span>
                       </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Chat Warga Section */}
+          {/* === Section: Chat Warga === */}
           {activeSection === "chat" && (
             <div className="flex gap-6 h-[calc(100vh-200px)]">
               <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-border flex flex-col">
-                <div className="p-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground">Chat Warga</h3>
-                  <p className="text-xs text-muted">Balas pesan dari warga</p>
-                </div>
+                <div className="p-4 border-b border-border"><h3 className="text-lg font-bold text-foreground">Chat Warga</h3><p className="text-xs text-muted-foreground">Balas pesan dari warga</p></div>
                 <div className="flex-1 overflow-y-auto">
                   {chatRoomsList.map((room) => (
-                    <div
-                      key={room.id}
-                      onClick={() => setSelectedChatRoom(room)}
-                      className={`p-4 border-b border-border cursor-pointer transition-colors ${
-                        selectedChatRoom?.id === room.id ? "bg-primary/5 border-l-2 border-l-primary" : "hover:bg-accent-light/30"
-                      }`}
-                    >
+                    <div key={room.id} onClick={() => setSelectedChatRoom(room)} className={`p-4 border-b border-border cursor-pointer transition-colors ${selectedChatRoom?.id === room.id ? "bg-primary/5 border-l-2 border-l-primary" : "hover:bg-accent-light/30"}`}>
                       <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center">
-                            <User className="w-5 h-5 text-primary" />
-                          </div>
-                          <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${room.status === "online" ? "bg-success" : "bg-muted/30"}`} />
-                        </div>
+                        <div className="relative"><div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center"><IconUser className="w-5 h-5 text-primary" /></div><span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${room.status === "online" ? "bg-success" : "bg-muted/30"}`} /></div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h5 className="font-semibold text-foreground text-sm">{room.wargaName}</h5>
-                            <span className="text-xs text-muted">{room.lastTime || ""}</span>
-                          </div>
-                          <p className="text-xs text-muted">{room.role}</p>
-                          <p className="text-xs text-muted truncate mt-0.5">{room.lastMessage || "Klik untuk membalas"}</p>
+                          <div className="flex items-center justify-between"><h5 className="font-semibold text-foreground text-sm">{room.wargaName}</h5><span className="text-xs text-muted-foreground">{room.lastTime || ""}</span></div>
+                          <p className="text-xs text-muted-foreground">{room.role}</p><p className="text-xs text-muted-foreground truncate mt-0.5">{room.lastMessage || "Klik untuk membalas"}</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-
               {selectedChatRoom ? (
                 <div className="flex-1 bg-white rounded-xl border border-border flex flex-col">
                   <div className="p-4 border-b border-border flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center">
-                        <User className="w-5 h-5 text-primary" />
-                      </div>
-                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${selectedChatRoom.status === "online" ? "bg-success" : "bg-muted/30"}`} />
-                    </div>
-                    <div>
-                      <h5 className="font-semibold text-foreground">{selectedChatRoom.wargaName}</h5>
-                      <p className="text-xs text-muted">{selectedChatRoom.status === "online" ? "Online" : "Offline"}</p>
-                    </div>
+                    <div className="relative"><div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center"><IconUser className="w-5 h-5 text-primary" /></div><span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${selectedChatRoom.status === "online" ? "bg-success" : "bg-muted/30"}`} /></div>
+                    <div><h5 className="font-semibold text-foreground">{selectedChatRoom.wargaName}</h5><p className="text-xs text-muted-foreground">{selectedChatRoom.status === "online" ? "Online" : "Offline"}</p></div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {selectedChatRoom.messages.map((msg) => (
                       <div key={msg.id} className={`flex ${msg.sender === "petugas" ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-xs lg:max-w-md ${
-                          msg.sender === "petugas"
-                            ? "bg-primary text-white rounded-2xl rounded-br-md"
-                            : "bg-accent-light text-foreground rounded-2xl rounded-bl-md"
-                        } px-4 py-3`}>
-                          <p className="text-sm">{msg.text}</p>
-                          <p className={`text-xs mt-1 ${msg.sender === "petugas" ? "text-white/70" : "text-muted"}`}>{msg.time}</p>
+                        <div className={`max-w-xs lg:max-w-md ${msg.sender === "petugas" ? "bg-primary text-white rounded-2xl rounded-br-md" : "bg-accent-light text-foreground rounded-2xl rounded-bl-md"} px-4 py-3`}>
+                          <p className="text-sm">{msg.text}</p><p className={`text-xs mt-1 ${msg.sender === "petugas" ? "text-white/70" : "text-muted-foreground"}`}>{msg.time}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                   <div className="p-4 border-t border-border">
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (!chatMessage.trim() || !selectedChatRoom) return;
-
-                        const userTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-                        const newMsg: ChatMessage = {
-                          id: Date.now(),
-                          sender: "petugas",
-                          name: profileName,
-                          text: chatMessage,
-                          time: userTime,
-                        };
-
-                        const currentRoom = selectedChatRoom;
-                        const updatedRooms = chatRoomsList.map((room) => {
-                          if (room.id === currentRoom.id) {
-                            const updatedRoom = { ...room, messages: [...room.messages, newMsg], lastMessage: chatMessage, lastTime: "Sekarang" };
-                            setSelectedChatRoom(updatedRoom);
-                            return updatedRoom;
-                          }
-                          return room;
-                        });
-                        setChatRoomsList(updatedRooms);
-                        setChatMessage("");
-
-                        const replies = autoReplies[currentRoom.wargaName] || ["Terima kasih pesannya."];
-                        const randomReply = replies[Math.floor(Math.random() * replies.length)];
-
-                        setTimeout(() => {
-                          const wargaTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-                          const replyMsg: ChatMessage = { id: Date.now() + 1, sender: "user", name: currentRoom.wargaName, text: randomReply, time: wargaTime };
-                          setChatRoomsList((prev) => prev.map((room) => {
-                            if (room.id === currentRoom.id) {
-                              const updatedRoom = { ...room, messages: [...room.messages, replyMsg], lastMessage: randomReply, lastTime: "Sekarang" };
-                              setSelectedChatRoom(updatedRoom);
-                              return updatedRoom;
-                            }
-                            return room;
-                          }));
-                        }, 1500);
-                      }}
-                      className="flex items-center gap-3"
-                    >
-                      <input
-                        type="text"
-                        value={chatMessage}
-                        onChange={(e) => setChatMessage(e.target.value)}
-                        placeholder="Ketik balasan..."
-                        className="flex-1 px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus"
-                      />
-                      <button type="submit" className="p-3 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors">
-                        <Send className="w-5 h-5" />
-                      </button>
+                    <form onSubmit={handleSendChat} className="flex items-center gap-3">
+                      <Input value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} placeholder="Ketik balasan..." className="input-focus" />
+                      <Button type="submit" className="p-3 bg-primary text-white hover:bg-primary-dark rounded-xl"><IconSend className="w-5 h-5" /></Button>
                     </form>
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 bg-white rounded-xl border border-border flex items-center justify-center">
-                  <div className="text-center">
-                    <Headphones className="w-12 h-12 text-muted/30 mx-auto mb-3" />
-                    <p className="text-muted">Pilih warga untuk membalas chat</p>
-                  </div>
-                </div>
+                <div className="flex-1 bg-white rounded-xl border border-border flex items-center justify-center"><div className="text-center"><IconHeadphones className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" /><p className="text-muted-foreground">Pilih warga untuk membalas chat</p></div></div>
               )}
             </div>
           )}
 
-          {/* Profil Section */}
+          {/* === Section: Profil === */}
           {activeSection === "profil" && (
             <div className="max-w-2xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-foreground">Profil Saya</h3>
-                {!isEditingProfile ? (
-                  <button onClick={() => setIsEditingProfile(true)} className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors shadow-sm">
-                    <User className="w-4 h-4" />
-                    Edit Profil
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsEditingProfile(false)} className="inline-flex items-center gap-2 bg-accent-light text-primary px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors">Batal</button>
-                    <button onClick={() => setIsEditingProfile(false)} className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-dark transition-colors shadow-sm">Simpan</button>
-                  </div>
-                )}
+                {!isEditingProfile ? <Button onClick={() => setIsEditingProfile(true)} className="bg-primary text-white hover:bg-primary-dark shadow-sm"><IconUser className="w-4 h-4 mr-2" /> Edit Profil</Button> : <div className="flex gap-2"><Button variant="outline" onClick={() => setIsEditingProfile(false)} className="border-border">Batal</Button><Button onClick={() => setIsEditingProfile(false)} className="bg-primary text-white hover:bg-primary-dark shadow-sm">Simpan</Button></div>}
               </div>
-              <div className="bg-white rounded-xl border border-border p-6">
+              <Card className="border-border"><CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6 pb-6 border-b border-border">
                   <div className="relative group">
-                    {profilePhoto ? (
-                      <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" />
-                    ) : (
-                      <div className="w-20 h-20 rounded-xl bg-primary/10 flex items-center justify-center border-2 border-amber-400">
-                        <Settings className="w-10 h-10 text-primary" />
-                      </div>
-                    )}
-                    {isEditingProfile && (
-                      <div className="absolute inset-0 rounded-xl flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="absolute inset-0 bg-black/50 rounded-xl" />
-                        <button onClick={() => setShowAvatarPicker(true)} className="relative z-10 p-1.5 bg-primary rounded-lg text-white hover:bg-primary-dark transition-colors" title="Pilih Avatar">
-                          <User className="w-3.5 h-3.5" />
-                        </button>
-                        <label className="relative z-10 p-1.5 bg-primary rounded-lg text-white hover:bg-primary-dark transition-colors cursor-pointer" title="Upload Foto">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => setProfilePhoto(reader.result as string);
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
-                    )}
+                    {profilePhoto ? <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" /> : <div className="w-20 h-20 rounded-xl bg-primary/10 flex items-center justify-center border-2 border-amber-400"><IconSettings className="w-10 h-10 text-primary" /></div>}
                   </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-foreground">{profileName}</h4>
-                    <p className="text-sm text-primary font-medium">Administrator &bull; {profileDesa}</p>
-                    {isEditingProfile && (
-                      <button onClick={() => setShowAvatarPicker(true)} className="text-xs text-primary hover:text-primary-dark font-medium mt-1">Ganti Avatar</button>
-                    )}
-                  </div>
+                  <div><h4 className="text-lg font-bold text-foreground">{profileName}</h4><p className="text-sm text-primary font-medium">Administrator &bull; {profileDesa}</p></div>
                 </div>
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Nama Lengkap</label>
-                    {isEditingProfile ? (
-                      <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" />
-                    ) : (
-                      <p className="text-foreground font-medium">{profileName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-                    {isEditingProfile ? (
-                      <input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" />
-                    ) : (
-                      <p className="text-foreground font-medium">{profileEmail}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Telepon</label>
-                    {isEditingProfile ? (
-                      <input type="tel" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" />
-                    ) : (
-                      <p className="text-foreground font-medium">{profilePhone}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Alamat</label>
-                    {isEditingProfile ? (
-                      <input type="text" value={profileAddress} onChange={(e) => setProfileAddress(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" />
-                    ) : (
-                      <p className="text-foreground font-medium">{profileAddress}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Desa</label>
-                    {isEditingProfile ? (
-                      <select value={profileDesa} onChange={(e) => setProfileDesa(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border text-foreground focus:outline-none input-focus">
-                        <option value="Desa Batu Ampar">Desa Batu Ampar</option>
-                        <option value="Desa Sempaja">Desa Sempaja</option>
-                        <option value="Desa Prapatan">Desa Prapatan</option>
-                      </select>
-                    ) : (
-                      <p className="text-foreground font-medium">{profileDesa}</p>
-                    )}
-                  </div>
+                  {[{ label: "Nama Lengkap", value: profileName, set: setProfileName, type: "text" }, { label: "Email", value: profileEmail, set: setProfileEmail, type: "email" }, { label: "Telepon", value: profilePhone, set: setProfilePhone, type: "tel" }, { label: "Alamat", value: profileAddress, set: setProfileAddress, type: "text" }].map((f) => (
+                    <div key={f.label}><Label className="mb-2">{f.label}</Label>{isEditingProfile ? <Input type={f.type} value={f.value} onChange={(e) => f.set(e.target.value)} className="input-focus" /> : <p className="text-foreground font-medium">{f.value}</p>}</div>
+                  ))}
+                  <div><Label className="mb-2">Desa</Label>{isEditingProfile ? <Select value={profileDesa} onValueChange={(v) => v && setProfileDesa(v)}><SelectTrigger className="input-focus"><SelectValue /></SelectTrigger><SelectContent>{daftarDesa.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select> : <p className="text-foreground font-medium">{profileDesa}</p>}</div>
                 </div>
-              </div>
+              </CardContent></Card>
             </div>
           )}
 
-          {/* Modal Avatar Picker */}
-          {showAvatarPicker && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAvatarPicker(false)} />
-              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
-                <div className="p-6 border-b border-border flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-foreground">Pilih Avatar</h3>
-                  <button onClick={() => setShowAvatarPicker(false)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-4 gap-3 mb-6">
-                    {["👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫", "👩‍⚕️", "👨‍⚕️", "👩‍🍳", "👨‍🍳", "🧑‍🎓", "🧑‍💻", "🧑‍🔬", "🧑‍🎨"].map((avatar) => (
-                      <button
-                        key={avatar}
-                        onClick={() => { setProfilePhoto(avatar); setShowAvatarPicker(false); }}
-                        className={`w-full aspect-square rounded-xl flex items-center justify-center text-3xl border-2 transition-all hover:scale-105 ${
-                          profilePhoto === avatar ? "border-primary bg-primary/5 shadow-md" : "border-border hover:border-accent"
-                        }`}
-                      >
-                        {avatar}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="border-t border-border pt-4">
-                    <label className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-border hover:border-accent transition-colors cursor-pointer text-sm font-medium text-muted hover:text-foreground">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      Upload dari File
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => { setProfilePhoto(reader.result as string); setShowAvatarPicker(false); };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                    </label>
-                    <button
-                      onClick={() => { setProfilePhoto(null); setShowAvatarPicker(false); }}
-                      className="w-full mt-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted hover:text-foreground hover:bg-accent-light/50 transition-colors"
-                    >
-                      Hapus Foto (Gunakan Default)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Ganti Kata Sandi Section */}
+          {/* === Section: Ganti Kata Sandi === */}
           {activeSection === "sandi" && (
             <div className="max-w-md">
               <h3 className="text-xl font-bold text-foreground mb-6">Ganti Kata Sandi</h3>
-              <div className="bg-white rounded-xl border border-border p-6">
+              <Card className="border-border"><CardContent className="p-6">
                 {showSandiSuccess ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle className="w-8 h-8 text-success" />
-                    </div>
-                    <h4 className="text-lg font-bold text-foreground mb-2">Kata Sandi Berhasil Diganti!</h4>
-                    <p className="text-sm text-muted mb-6">Kata sandi Anda telah berhasil diperbarui.</p>
-                    <button onClick={() => setShowSandiSuccess(false)} className="bg-primary text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm">Kembali</button>
-                  </div>
+                  <div className="text-center py-8"><div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4"><IconCircleCheck className="w-8 h-8 text-success" /></div><h4 className="text-lg font-bold text-foreground mb-2">Kata Sandi Berhasil Diganti!</h4><p className="text-sm text-muted-foreground mb-6">Kata sandi Anda telah berhasil diperbarui.</p><Button onClick={() => setShowSandiSuccess(false)} className="bg-primary text-white hover:bg-primary-dark">Kembali</Button></div>
                 ) : (
                   <form onSubmit={(e) => { e.preventDefault(); setShowSandiSuccess(true); }} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Kata Sandi Lama</label>
-                      <input type="password" placeholder="Masukkan kata sandi lama" className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Kata Sandi Baru</label>
-                      <input type="password" placeholder="Masukkan kata sandi baru" className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Konfirmasi Kata Sandi</label>
-                      <input type="password" placeholder="Ulangi kata sandi baru" className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus" required />
-                    </div>
-                    <button type="submit" className="w-full bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm">Simpan Perubahan</button>
+                    <div><Label className="mb-2">Kata Sandi Lama</Label><Input type="password" placeholder="Masukkan kata sandi lama" className="input-focus" required /></div>
+                    <div><Label className="mb-2">Kata Sandi Baru</Label><Input type="password" placeholder="Masukkan kata sandi baru" className="input-focus" required /></div>
+                    <div><Label className="mb-2">Konfirmasi Kata Sandi</Label><Input type="password" placeholder="Ulangi kata sandi baru" className="input-focus" required /></div>
+                    <Button type="submit" className="w-full bg-primary text-white hover:bg-primary-dark shadow-sm">Simpan Perubahan</Button>
                   </form>
                 )}
-              </div>
+              </CardContent></Card>
             </div>
           )}
         </main>
       </div>
 
-      {/* Modal Detail Aspirasi */}
-      {selectedAspirasi && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedAspirasi(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-foreground">Detail Aspirasi</h3>
-                <p className="text-sm text-muted">{selectedAspirasi.id}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleDownloadAspirasiPdf(selectedAspirasi)}
-                  className="inline-flex items-center gap-1.5 bg-primary text-white px-3 py-2 rounded-xl text-xs font-semibold hover:bg-primary-dark transition-colors shadow-sm"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  PDF
-                </button>
-                <button onClick={() => setSelectedAspirasi(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+      {/* === Modal: Detail Aspirasi === */}
+      <Dialog open={!!selectedAspirasi} onOpenChange={(o) => !o && setSelectedAspirasi(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detail Aspirasi</DialogTitle><p className="text-sm text-muted-foreground">{selectedAspirasi?.id}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Button size="sm" onClick={() => selectedAspirasi && handleDownloadAspirasiPdf(selectedAspirasi)} className="bg-primary text-white hover:bg-primary-dark"><IconDownload className="w-3.5 h-3.5 mr-1" /> PDF</Button>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Judul</Label><p className="text-foreground font-semibold">{selectedAspirasi?.judul}</p></div>
+            <div className="flex gap-4"><div className="flex-1"><Label>Kategori</Label><p className="text-foreground font-medium">{selectedAspirasi?.kategori}</p></div>
+              <div className="flex-1"><Label>Ubah Status</Label>
+                <select value={selectedAspirasi?.status || ""} onChange={(e) => {
+                  if (!selectedAspirasi) return;
+                  const val = e.target.value;
+                  setAspirasiList(aspirasiList.map((a) => a.id === selectedAspirasi.id ? { ...a, status: val } : a));
+                  setSelectedAspirasi({ ...selectedAspirasi, status: val });
+                }} className="w-full text-sm px-3 py-2 rounded-lg border border-border text-foreground focus:outline-none input-focus mt-1">
+                  <option value="Diterima">Diterima</option>
+                  <option value="Diproses">Diproses</option>
+                  <option value="Selesai">Selesai</option>
+                </select>
               </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted">Judul</label>
-                <p className="text-foreground font-semibold">{selectedAspirasi.judul}</p>
+            <div><Label>Desa</Label><p className="text-foreground font-medium">{selectedAspirasi?.desa}</p></div>
+            <div><Label>Tanggal</Label><p className="text-foreground font-medium">{selectedAspirasi?.tanggal}</p></div>
+            <div><Label>Deskripsi</Label><p className="text-foreground leading-relaxed bg-accent-light/30 p-4 rounded-xl">{selectedAspirasi?.deskripsi}</p></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Modal: Detail Warga === */}
+      <Dialog open={!!selectedWarga} onOpenChange={(o) => !o && setSelectedWarga(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Detail Warga</DialogTitle><p className="text-sm text-muted-foreground">{selectedWarga?.id}</p></DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center"><IconUser className="w-8 h-8 text-primary" /></div>
+              <div><h4 className="text-lg font-bold text-foreground">{selectedWarga?.nama}</h4><Badge className={`border-0 hover:bg-transparent ${selectedWarga?.status === "Aktif" ? "bg-success/10 text-success" : "bg-muted/10 text-muted-foreground"}`}>{selectedWarga?.status}</Badge></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>NIK</Label><p className="text-foreground font-mono">{selectedWarga?.nik}</p></div>
+              <div><Label>Desa</Label><p className="text-foreground font-medium">{selectedWarga?.desa}</p></div>
+              <div><Label>Email</Label><p className="text-foreground font-medium">{selectedWarga?.email}</p></div>
+              <div><Label>Telepon</Label><p className="text-foreground font-medium">{selectedWarga?.telepon}</p></div>
+            </div>
+            <div><Label>Tanggal Daftar</Label><p className="text-foreground font-medium">{selectedWarga?.tanggalDaftar}</p></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Modal: Tambah/Edit Kandidat === */}
+      <Dialog open={showFormKandidat || showEditKandidat} onOpenChange={(o) => { if (!o) { setShowFormKandidat(false); setShowEditKandidat(false); setEditKandidatId(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{showEditKandidat ? "Edit" : "Tambah"} Kandidat</DialogTitle></DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const r = kandidatSchema.safeParse({ nama: formKandidatNama, visi: formKandidatVisi });
+            if (!r.success) return;
+            if (showEditKandidat && editKandidatId) {
+              setKandidatList(kandidatList.map((k) => k.id === editKandidatId ? { ...k, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto } : k));
+              setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Diperbarui", message: `Data ${formKandidatNama} berhasil diperbarui`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+            } else {
+              setKandidatList([...kandidatList, { id: kandidatList.length + 1, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto, suara: 0 }]);
+              setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Ditambahkan", message: `${formKandidatNama} berhasil ditambahkan`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+            }
+            setFormKandidatNama(""); setFormKandidatVisi(""); setFormKandidatFoto("👤"); setShowFormKandidat(false); setShowEditKandidat(false); setEditKandidatId(null);
+          }} className="space-y-5">
+            <div>
+              <Label className="mb-2">Foto / Avatar</Label>
+              <div className="flex flex-wrap gap-2">
+                {["👤", "👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫"].map((a) => (
+                  <Button key={a} type="button" variant="outline" onClick={() => setFormKandidatFoto(a)} className={`w-12 h-12 text-2xl border-2 ${formKandidatFoto === a ? "border-primary bg-primary/5" : "border-border"}`}>{a}</Button>
+                ))}
               </div>
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="text-sm font-medium text-muted">Kategori</label>
-                  <p className="text-foreground font-medium">{selectedAspirasi.kategori}</p>
-                </div>
-                <div className="flex-1">
-                  <label className="text-sm font-medium text-muted">Status</label>
-                  <p className="text-foreground font-medium">{selectedAspirasi.status}</p>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Desa</label>
-                <p className="text-foreground font-medium">{selectedAspirasi.desa}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Tanggal</label>
-                <p className="text-foreground font-medium">{selectedAspirasi.tanggal}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Deskripsi</label>
-                <p className="text-foreground leading-relaxed bg-accent-light/30 p-4 rounded-xl">{selectedAspirasi.deskripsi}</p>
-              </div>
+            </div>
+            <div><Label className="mb-2">Nama Lengkap</Label><Input value={formKandidatNama} onChange={(e) => setFormKandidatNama(e.target.value)} placeholder="Masukkan nama kandidat" className="input-focus" required /></div>
+            <div><Label className="mb-2">Visi & Misi</Label><Textarea rows={3} value={formKandidatVisi} onChange={(e) => setFormKandidatVisi(e.target.value)} placeholder="Tuliskan visi dan misi kandidat..." className="input-focus resize-none" required /></div>
+            <Button type="submit" className="w-full bg-primary text-white hover:bg-primary-dark shadow-sm"><IconUser className="w-4 h-4 mr-2" /> {showEditKandidat ? "Simpan Perubahan" : "Tambah Kandidat"}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Modal: Detail Kandidat === */}
+      <Dialog open={!!selectedKandidatDetail} onOpenChange={(o) => !o && setSelectedKandidatDetail(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Detail Kandidat</DialogTitle></DialogHeader>
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 rounded-xl bg-accent-light flex items-center justify-center mx-auto text-4xl">{selectedKandidatDetail?.foto}</div>
+            <h4 className="text-xl font-bold text-foreground">{selectedKandidatDetail?.nama}</h4>
+            <div><Label>Visi & Misi</Label><p className="text-foreground leading-relaxed bg-accent-light/30 p-4 rounded-xl mt-2">{selectedKandidatDetail?.visi}</p></div>
+            <div className="pt-4 border-t border-border">
+              <span className="text-3xl font-bold text-primary">{selectedKandidatDetail?.suara.toLocaleString("id-ID")}</span>
+              <p className="text-sm text-muted-foreground">suara diterima</p>
+              <p className="text-lg font-bold text-foreground mt-1">{selectedKandidatDetail ? `${((selectedKandidatDetail.suara / totalSuara) * 100).toFixed(1)}%` : "0%"}</p>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Detail Warga */}
-      {selectedWarga && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedWarga(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-foreground">Detail Warga</h3>
-                <p className="text-sm text-muted">{selectedWarga.id}</p>
-              </div>
-              <button onClick={() => setSelectedWarga(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center">
-                  <User className="w-8 h-8 text-primary" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-bold text-foreground">{selectedWarga.nama}</h4>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${selectedWarga.status === "Aktif" ? "bg-success/10 text-success" : "bg-muted/10 text-muted"}`}>{selectedWarga.status}</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted">NIK</label>
-                  <p className="text-foreground font-mono">{selectedWarga.nik}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted">Desa</label>
-                  <p className="text-foreground font-medium">{selectedWarga.desa}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted">Email</label>
-                  <p className="text-foreground font-medium">{selectedWarga.email}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted">Telepon</label>
-                  <p className="text-foreground font-medium">{selectedWarga.telepon}</p>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Tanggal Daftar</label>
-                <p className="text-foreground font-medium">{selectedWarga.tanggalDaftar}</p>
-              </div>
-            </div>
+      {/* === Modal: Detail Papan Publik === */}
+      <Dialog open={!!selectedPapanPublik} onOpenChange={(o) => !o && setSelectedPapanPublik(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{selectedPapanPublik?.judul}</DialogTitle><p className="text-sm text-muted-foreground">{selectedPapanPublik?.desa}</p></DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2"><Badge className="bg-primary/10 text-primary border-0 hover:bg-primary/10">{selectedPapanPublik?.kategori}</Badge><Badge className={`border-0 hover:bg-transparent ${selectedPapanPublik?.status === "Aktif" ? "bg-primary/10 text-primary" : "bg-success/10 text-success"}`}>{selectedPapanPublik?.status}</Badge></div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-1"><IconMapPin className="w-4 h-4" />{selectedPapanPublik?.desa}</span><span className="flex items-center gap-1"><IconClock className="w-4 h-4" />{selectedPapanPublik?.waktu}</span></div>
+            <div><Label>Deskripsi</Label><p className="text-foreground leading-relaxed bg-accent-light/30 p-4 rounded-xl mt-2">{selectedPapanPublik?.deskripsi}</p></div>
+            <div className="flex items-center gap-2 pt-4 border-t border-border"><IconClipboardList className="w-5 h-5 text-primary" /><span className="text-lg font-bold text-foreground">{selectedPapanPublik && (papanVotes[selectedPapanPublik.id] || selectedPapanPublik.votes)}</span><span className="text-sm text-muted-foreground">suara mendukung</span></div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Form Tambah Kandidat */}
-      {showFormKandidat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowFormKandidat(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <h3 className="text-xl font-bold text-foreground">Tambah Kandidat</h3>
-              <button onClick={() => setShowFormKandidat(false)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!formKandidatNama || !formKandidatVisi) return;
-                  const newKandidat: Kandidat = {
-                    id: kandidatList.length + 1,
-                    nama: formKandidatNama,
-                    visi: formKandidatVisi,
-                    foto: formKandidatFoto,
-                    suara: 0,
-                  };
-                  setKandidatList([...kandidatList, newKandidat]);
-                  setNotifications([{
-                    id: Date.now(),
-                    type: "aspirasi",
-                    title: "Kandidat Ditambahkan",
-                    message: `${formKandidatNama} berhasil ditambahkan sebagai kandidat`,
-                    time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-                    read: false,
-                  }, ...notifications]);
-                  setFormKandidatNama("");
-                  setFormKandidatVisi("");
-                  setFormKandidatFoto("👤");
-                  setShowFormKandidat(false);
-                }}
-                className="space-y-5"
-              >
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Foto / Avatar</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["👤", "👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫"].map((avatar) => (
-                      <button
-                        key={avatar}
-                        type="button"
-                        onClick={() => setFormKandidatFoto(avatar)}
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border-2 transition-all ${
-                          formKandidatFoto === avatar ? "border-primary bg-primary/5 shadow-md" : "border-border hover:border-accent"
-                        }`}
-                      >
-                        {avatar}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Nama Lengkap</label>
-                  <input
-                    type="text"
-                    value={formKandidatNama}
-                    onChange={(e) => setFormKandidatNama(e.target.value)}
-                    placeholder="Masukkan nama kandidat"
-                    className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Visi & Misi</label>
-                  <textarea
-                    rows={3}
-                    value={formKandidatVisi}
-                    onChange={(e) => setFormKandidatVisi(e.target.value)}
-                    placeholder="Tuliskan visi dan misi kandidat..."
-                    className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus resize-none"
-                    required
-                  />
-                </div>
-                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm">
-                  <User className="w-4 h-4" />
-                  Tambah Kandidat
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Form Edit Kandidat */}
-      {showEditKandidat && editKandidatId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowEditKandidat(false); setEditKandidatId(null); }} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <h3 className="text-xl font-bold text-foreground">Edit Kandidat</h3>
-              <button onClick={() => { setShowEditKandidat(false); setEditKandidatId(null); }} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!formKandidatNama || !formKandidatVisi) return;
-                  setKandidatList(kandidatList.map((k) =>
-                    k.id === editKandidatId
-                      ? { ...k, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto }
-                      : k
-                  ));
-                  setNotifications([{
-                    id: Date.now(),
-                    type: "aspirasi",
-                    title: "Kandidat Diperbarui",
-                    message: `Data kandidat ${formKandidatNama} berhasil diperbarui`,
-                    time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-                    read: false,
-                  }, ...notifications]);
-                  setFormKandidatNama("");
-                  setFormKandidatVisi("");
-                  setFormKandidatFoto("👤");
-                  setShowEditKandidat(false);
-                  setEditKandidatId(null);
-                }}
-                className="space-y-5"
-              >
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Foto / Avatar</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["👤", "👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫"].map((avatar) => (
-                      <button
-                        key={avatar}
-                        type="button"
-                        onClick={() => setFormKandidatFoto(avatar)}
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border-2 transition-all ${
-                          formKandidatFoto === avatar ? "border-primary bg-primary/5 shadow-md" : "border-border hover:border-accent"
-                        }`}
-                      >
-                        {avatar}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Nama Lengkap</label>
-                  <input
-                    type="text"
-                    value={formKandidatNama}
-                    onChange={(e) => setFormKandidatNama(e.target.value)}
-                    placeholder="Masukkan nama kandidat"
-                    className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Visi & Misi</label>
-                  <textarea
-                    rows={3}
-                    value={formKandidatVisi}
-                    onChange={(e) => setFormKandidatVisi(e.target.value)}
-                    placeholder="Tuliskan visi dan misi kandidat..."
-                    className="w-full px-4 py-3 rounded-xl border border-border text-foreground placeholder:text-muted/50 focus:outline-none input-focus resize-none"
-                    required
-                  />
-                </div>
-                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark transition-colors shadow-sm">
-                  <User className="w-4 h-4" />
-                  Simpan Perubahan
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Detail Kandidat */}
-      {selectedKandidatDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedKandidatDetail(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <h3 className="text-xl font-bold text-foreground">Detail Kandidat</h3>
-              <button onClick={() => setSelectedKandidatDetail(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="text-center">
-                <div className="w-20 h-20 rounded-xl bg-accent-light flex items-center justify-center mx-auto mb-3 text-4xl">{selectedKandidatDetail.foto}</div>
-                <h4 className="text-xl font-bold text-foreground">{selectedKandidatDetail.nama}</h4>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Visi & Misi</label>
-                <p className="text-foreground leading-relaxed bg-accent-light/30 p-4 rounded-xl">{selectedKandidatDetail.visi}</p>
-              </div>
-              <div className="text-center pt-4 border-t border-border">
-                <span className="text-3xl font-bold text-primary">{selectedKandidatDetail.suara.toLocaleString("id-ID")}</span>
-                <p className="text-sm text-muted">suara diterima</p>
-                <p className="text-lg font-bold text-foreground mt-1">{((selectedKandidatDetail.suara / totalSuara) * 100).toFixed(1)}%</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Detail Papan Publik */}
-      {selectedPapanPublik && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedPapanPublik(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-foreground">{selectedPapanPublik.judul}</h3>
-                <p className="text-sm text-muted">{selectedPapanPublik.desa}</p>
-              </div>
-              <button onClick={() => setSelectedPapanPublik(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2.5 py-1 bg-primary/10 text-primary rounded-full font-medium">{selectedPapanPublik.kategori}</span>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${selectedPapanPublik.status === "Aktif" ? "bg-primary/10 text-primary" : "bg-success/10 text-success"}`}>{selectedPapanPublik.status}</span>
-              </div>
-              <div className="flex items-center gap-4 text-sm text-muted">
-                <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{selectedPapanPublik.desa}</span>
-                <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{selectedPapanPublik.waktu}</span>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Deskripsi</label>
-                <p className="text-foreground leading-relaxed bg-accent-light/30 p-4 rounded-xl mt-2">{selectedPapanPublik.deskripsi}</p>
-              </div>
-              <div className="flex items-center justify-between pt-4 border-t border-border">
-                <div className="flex items-center gap-2">
-                  <Vote className="w-5 h-5 text-primary" />
-                  <span className="text-lg font-bold text-foreground">{papanVotes[selectedPapanPublik.id] || selectedPapanPublik.votes}</span>
-                  <span className="text-sm text-muted">suara mendukung</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Statistik: Aspirasi per Status */}
-      {statModal === "aspirasi-status" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <PieChart className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Aspirasi per Status</h3>
-                  <p className="text-sm text-muted">{aspirasiList.length} total aspirasi</p>
-                </div>
-              </div>
-              <button onClick={() => setStatModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              {["Diterima", "Diproses", "Selesai"].map((status) => {
-                const filtered = aspirasiList.filter((a) => a.status === status);
-                const statusColor: Record<string, string> = {
-                  Diproses: "bg-primary/10 text-primary",
-                  Diterima: "bg-accent-light text-primary-dark",
-                  Selesai: "bg-success/10 text-success",
-                };
-                return (
-                  <div key={status} className="mb-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`text-sm font-semibold px-3 py-1 rounded-full ${statusColor[status]}`}>{status}</span>
-                      <span className="text-sm text-muted">({filtered.length} aspirasi)</span>
-                    </div>
-                    <div className="space-y-2">
-                      {filtered.map((item) => (
-                        <div key={item.id} onClick={() => { setStatModal(null); setSelectedAspirasi(item); }} className="flex items-center justify-between p-4 rounded-xl bg-accent-light/30 hover:bg-accent-light/50 transition-colors cursor-pointer">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground">{item.judul}</p>
-                            <p className="text-xs text-muted">{item.desa} &bull; {item.tanggal}</p>
-                          </div>
-                          <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium flex-shrink-0 ml-2">{item.kategori}</span>
-                        </div>
-                      ))}
-                      {filtered.length === 0 && <p className="text-sm text-muted text-center py-4">Tidak ada aspirasi</p>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Statistik: Hasil Voting */}
-      {statModal === "voting" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Hasil Voting Real-time</h3>
-                  <p className="text-sm text-muted">Total {totalSuara.toLocaleString("id-ID")} suara masuk</p>
-                </div>
-              </div>
-              <button onClick={() => setStatModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              {[...kandidatList].sort((a, b) => b.suara - a.suara).map((kandidat, index) => (
-                <div key={kandidat.id} className="mb-6 last:mb-0">
+      {/* === Modal: Statistik - Voting === */}
+      <Dialog open={statModal === "voting"} onOpenChange={(o) => !o && setStatModal(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><IconChartBar className="w-5 h-5 text-primary" /></div><div><DialogTitle>Hasil Voting Real-time</DialogTitle><p className="text-sm text-muted-foreground">Total {totalSuara.toLocaleString("id-ID")} suara masuk</p></div></div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]">
+            <div className="space-y-6">
+              {[...kandidatList].sort((a, b) => b.suara - a.suara).map((k, i) => (
+                <div key={k.id}>
                   <div className="flex items-center gap-4 mb-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${index === 0 ? "bg-primary text-white" : "bg-accent-light text-primary"}`}>
-                      {index + 1}
-                    </div>
-                    <span className="text-2xl">{kandidat.foto}</span>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-foreground">{kandidat.nama}</h4>
-                      <p className="text-xs text-muted">{kandidat.visi}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-primary">{kandidat.suara.toLocaleString("id-ID")}</p>
-                      <p className="text-sm font-bold text-foreground">{((kandidat.suara / totalSuara) * 100).toFixed(1)}%</p>
-                    </div>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${i === 0 ? "bg-primary text-white" : "bg-accent-light text-primary"}`}>{i + 1}</div>
+                    <span className="text-2xl">{k.foto}</span>
+                    <div className="flex-1"><h4 className="font-bold text-foreground">{k.nama}</h4><p className="text-xs text-muted-foreground">{k.visi}</p></div>
+                    <div className="text-right"><p className="text-2xl font-bold text-primary">{k.suara.toLocaleString("id-ID")}</p><p className="text-sm font-bold text-foreground">{((k.suara / totalSuara) * 100).toFixed(1)}%</p></div>
                   </div>
-                  <div className="w-full bg-accent-light rounded-full h-4">
-                    <div className="bg-primary rounded-full h-4 transition-all" style={{ width: `${(kandidat.suara / totalSuara) * 100}%` }} />
-                  </div>
+                  <div className="w-full bg-accent-light rounded-full h-4"><div className="bg-primary rounded-full h-4 transition-all" style={{ width: `${(k.suara / totalSuara) * 100}%` }} /></div>
                 </div>
               ))}
-              <div className="mt-6 pt-6 border-t border-border">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted font-medium">Total Seluruh Suara</span>
-                  <span className="text-2xl font-bold text-foreground">{totalSuara.toLocaleString("id-ID")}</span>
-                </div>
-              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Statistik: Aspirasi Terbaru */}
-      {statModal === "aspirasi-terbaru" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-primary" />
+      {/* === Modal: Statistik - Aspirasi Terbaru === */}
+      <Dialog open={statModal === "aspirasi-terbaru"} onOpenChange={(o) => !o && setStatModal(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><IconFileText className="w-5 h-5 text-primary" /></div><div><DialogTitle>Semua Aspirasi</DialogTitle><p className="text-sm text-muted-foreground">{aspirasiList.length} aspirasi dari warga</p></div></div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]">
+            <div className="space-y-3">
+              {aspirasiList.map((item) => (
+                <div key={item.id} onClick={() => { setStatModal(null); setSelectedAspirasi(item); }} className="p-4 rounded-xl bg-accent-light/30 hover:bg-accent-light/50 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><span className="text-xs font-mono text-muted-foreground">{item.id}</span><Badge className="bg-primary/10 text-primary border-0 hover:bg-primary/10">{item.kategori}</Badge></div><Badge className={`border-0 hover:bg-transparent ${STATUS_COLORS[item.status] || ""}`}>{item.status}</Badge></div>
+                  <h4 className="font-semibold text-foreground mb-1">{item.judul}</h4>
+                  <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{item.deskripsi}</p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="flex items-center gap-1"><IconMapPin className="w-3 h-3" />{item.desa}</span><span className="flex items-center gap-1"><IconClock className="w-3 h-3" />{item.tanggal}</span></div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Semua Aspirasi</h3>
-                  <p className="text-sm text-muted">{aspirasiList.length} aspirasi dari warga</p>
-                </div>
-              </div>
-              <button onClick={() => setStatModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              ))}
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              <div className="space-y-3">
-                {aspirasiList.map((item) => {
-                  const statusColor: Record<string, string> = {
-                    Diproses: "bg-primary/10 text-primary",
-                    Diterima: "bg-accent-light text-primary-dark",
-                    Selesai: "bg-success/10 text-success",
-                  };
-                  return (
-                    <div key={item.id} onClick={() => { setStatModal(null); setSelectedAspirasi(item); }} className="p-4 rounded-xl bg-accent-light/30 hover:bg-accent-light/50 transition-colors cursor-pointer">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono text-muted">{item.id}</span>
-                          <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">{item.kategori}</span>
-                        </div>
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor[item.status] || ""}`}>{item.status}</span>
-                      </div>
-                      <h4 className="font-semibold text-foreground mb-1">{item.judul}</h4>
-                      <p className="text-sm text-muted mb-2 line-clamp-2">{item.deskripsi}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted">
-                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{item.desa}</span>
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.tanggal}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Statistik: Kandidat Terpopuler */}
-      {statModal === "kandidat" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Kandidat Terpopuler</h3>
-                  <p className="text-sm text-muted">Peringkat berdasarkan jumlah suara</p>
-                </div>
-              </div>
-              <button onClick={() => setStatModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              <div className="space-y-4">
-                {[...kandidatList].sort((a, b) => b.suara - a.suara).map((kandidat, index) => (
-                  <div key={kandidat.id} className="p-5 rounded-xl bg-accent-light/30 hover:bg-accent-light/50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${index === 0 ? "bg-primary text-white" : index === 1 ? "bg-primary/20 text-primary" : "bg-accent-light text-primary"}`}>
-                        {index + 1}
-                      </div>
-                      <span className="text-3xl">{kandidat.foto}</span>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-foreground text-lg">{kandidat.nama}</h4>
-                        <p className="text-sm text-muted">{kandidat.visi}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-bold text-primary">{kandidat.suara.toLocaleString("id-ID")}</p>
-                        <p className="text-sm font-bold text-foreground">{((kandidat.suara / totalSuara) * 100).toFixed(1)}%</p>
-                        <p className="text-xs text-muted">suara</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 w-full bg-white rounded-full h-3">
-                      <div className="bg-primary rounded-full h-3 transition-all" style={{ width: `${(kandidat.suara / totalSuara) * 100}%` }} />
-                    </div>
+      {/* === Modal: Statistik - Kandidat === */}
+      <Dialog open={statModal === "kandidat"} onOpenChange={(o) => !o && setStatModal(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><IconTrendingUp className="w-5 h-5 text-primary" /></div><div><DialogTitle>Kandidat Terpopuler</DialogTitle><p className="text-sm text-muted-foreground">Peringkat berdasarkan jumlah suara</p></div></div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]">
+            <div className="space-y-4">
+              {[...kandidatList].sort((a, b) => b.suara - a.suara).map((k, i) => (
+                <div key={k.id} className="p-5 rounded-xl bg-accent-light/30 hover:bg-accent-light/50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${i === 0 ? "bg-primary text-white" : i === 1 ? "bg-primary/20 text-primary" : "bg-accent-light text-primary"}`}>{i + 1}</div>
+                    <span className="text-3xl">{k.foto}</span>
+                    <div className="flex-1"><h4 className="font-bold text-foreground text-lg">{k.nama}</h4><p className="text-sm text-muted-foreground">{k.visi}</p></div>
+                    <div className="text-right"><p className="text-3xl font-bold text-primary">{k.suara.toLocaleString("id-ID")}</p><p className="text-sm font-bold text-foreground">{((k.suara / totalSuara) * 100).toFixed(1)}%</p><p className="text-xs text-muted-foreground">suara</p></div>
                   </div>
-                ))}
-              </div>
-              <div className="mt-6 pt-6 border-t border-border text-center">
-                <span className="text-sm text-muted">Total Suara: </span>
-                <span className="text-xl font-bold text-foreground">{totalSuara.toLocaleString("id-ID")}</span>
-              </div>
+                  <div className="mt-3 w-full bg-white rounded-full h-3"><div className="bg-primary rounded-full h-3 transition-all" style={{ width: `${(k.suara / totalSuara) * 100}%` }} /></div>
+                </div>
+              ))}
             </div>
-          </div>
-        </div>
-      )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Stat Bubble: Total Aspirasi */}
-      {statBubbleModal === "aspirasi" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatBubbleModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Total Aspirasi</h3>
-                  <p className="text-sm text-muted">{aspirasiList.length} aspirasi dari warga</p>
-                </div>
-              </div>
-              <button onClick={() => setStatBubbleModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              <div className="space-y-3">
-                {aspirasiList.map((item) => {
-                  const statusColor: Record<string, string> = {
-                    Diproses: "bg-primary/10 text-primary",
-                    Diterima: "bg-accent-light text-primary-dark",
-                    Selesai: "bg-success/10 text-success",
-                  };
-                  return (
-                    <div key={item.id} className="flex items-center justify-between p-4 rounded-xl bg-accent-light/30">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{item.judul}</p>
-                        <p className="text-xs text-muted">{item.desa} &bull; {item.tanggal}</p>
-                      </div>
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ml-2 ${statusColor[item.status] || ""}`}>{item.status}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* === Modal: Stat Bubble - Total Aspirasi === */}
+      <Dialog open={statBubbleModal === "aspirasi"} onOpenChange={(o) => !o && setStatBubbleModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><IconMessage className="w-5 h-5 text-primary" /></div><div><DialogTitle>Total Aspirasi</DialogTitle><p className="text-sm text-muted-foreground">{aspirasiList.length} aspirasi dari warga</p></div></div></DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]"><div className="space-y-3">{aspirasiList.map((item) => (<div key={item.id} className="flex items-center justify-between p-4 rounded-xl bg-accent-light/30"><div className="min-w-0"><p className="text-sm font-medium text-foreground">{item.judul}</p><p className="text-xs text-muted-foreground">{item.desa} &bull; {item.tanggal}</p></div><Badge className={`border-0 hover:bg-transparent flex-shrink-0 ml-2 ${STATUS_COLORS[item.status] || ""}`}>{item.status}</Badge></div>))}</div></ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Stat Bubble: Warga Aktif */}
-      {statBubbleModal === "warga" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatBubbleModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Warga Aktif</h3>
-                  <p className="text-sm text-muted">{wargaAktif} dari {wargaList.length} warga terdaftar</p>
-                </div>
-              </div>
-              <button onClick={() => setStatBubbleModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              <div className="space-y-3">
-                {wargaList.filter((w) => w.status === "Aktif").map((warga) => (
-                  <div key={warga.id} className="flex items-center gap-3 p-4 rounded-xl bg-accent-light/30">
-                    <div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center flex-shrink-0">
-                      <User className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">{warga.nama}</p>
-                      <p className="text-xs text-muted">{warga.desa} &bull; {warga.email}</p>
-                    </div>
-                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-success/10 text-success">Aktif</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* === Modal: Stat Bubble - Warga Aktif === */}
+      <Dialog open={statBubbleModal === "warga"} onOpenChange={(o) => !o && setStatBubbleModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><IconUsers className="w-5 h-5 text-primary" /></div><div><DialogTitle>Warga Aktif</DialogTitle><p className="text-sm text-muted-foreground">{wargaAktif} dari {wargaList.length} warga terdaftar</p></div></div></DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]"><div className="space-y-3">{wargaList.filter((w) => w.status === "Aktif").map((w) => (<div key={w.id} className="flex items-center gap-3 p-4 rounded-xl bg-accent-light/30"><div className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center flex-shrink-0"><IconUser className="w-5 h-5 text-primary" /></div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground">{w.nama}</p><p className="text-xs text-muted-foreground">{w.desa} &bull; {w.email}</p></div><Badge className="bg-success/10 text-success border-0 hover:bg-success/10">Aktif</Badge></div>))}</div></ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Stat Bubble: Total Suara */}
-      {statBubbleModal === "suara" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatBubbleModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Vote className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Total Suara</h3>
-                  <p className="text-sm text-muted">{totalSuara.toLocaleString("id-ID")} suara masuk</p>
-                </div>
-              </div>
-              <button onClick={() => setStatBubbleModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              <div className="space-y-4">
-                {[...kandidatList].sort((a, b) => b.suara - a.suara).map((kandidat, index) => (
-                  <div key={kandidat.id} className="p-4 rounded-xl bg-accent-light/30">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${index === 0 ? "bg-primary text-white" : "bg-accent-light text-primary"}`}>{index + 1}</div>
-                      <span className="text-xl">{kandidat.foto}</span>
-                      <div className="flex-1">
-                        <p className="font-semibold text-foreground">{kandidat.nama}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-primary">{kandidat.suara.toLocaleString("id-ID")}</p>
-                        <p className="text-xs text-muted">{((kandidat.suara / totalSuara) * 100).toFixed(1)}%</p>
-                      </div>
-                    </div>
-                    <div className="w-full bg-white rounded-full h-2">
-                      <div className="bg-primary rounded-full h-2" style={{ width: `${(kandidat.suara / totalSuara) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* === Modal: Stat Bubble - Total Suara === */}
+      <Dialog open={statBubbleModal === "suara"} onOpenChange={(o) => !o && setStatBubbleModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><IconClipboardList className="w-5 h-5 text-primary" /></div><div><DialogTitle>Total Suara</DialogTitle><p className="text-sm text-muted-foreground">{totalSuara.toLocaleString("id-ID")} suara masuk</p></div></div></DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]"><div className="space-y-4">{[...kandidatList].sort((a, b) => b.suara - a.suara).map((k, i) => (<div key={k.id} className="p-4 rounded-xl bg-accent-light/30"><div className="flex items-center gap-3 mb-2"><div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${i === 0 ? "bg-primary text-white" : "bg-accent-light text-primary"}`}>{i + 1}</div><span className="text-xl">{k.foto}</span><div className="flex-1"><p className="font-semibold text-foreground">{k.nama}</p></div><div className="text-right"><p className="text-lg font-bold text-primary">{k.suara.toLocaleString("id-ID")}</p><p className="text-xs text-muted-foreground">{((k.suara / totalSuara) * 100).toFixed(1)}%</p></div></div><div className="w-full bg-white rounded-full h-2"><div className="bg-primary rounded-full h-2" style={{ width: `${(k.suara / totalSuara) * 100}%` }} /></div></div>))}</div></ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal Stat Bubble: Aspirasi Selesai */}
-      {statBubbleModal === "selesai" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setStatBubbleModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden">
-            <div className="sticky top-0 bg-white border-b border-border p-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-success" />
+      {/* === Modal: Stat Bubble - Aspirasi Selesai === */}
+      <Dialog open={statBubbleModal === "selesai"} onOpenChange={(o) => !o && setStatBubbleModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center"><IconCircleCheck className="w-5 h-5 text-success" /></div><div><DialogTitle>Aspirasi Selesai</DialogTitle><p className="text-sm text-muted-foreground">{aspirasiSelesai} aspirasi telah diselesaikan</p></div></div></DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]">
+            {aspirasiList.filter((a) => a.status === "Selesai").length === 0 ? (
+              <div className="text-center py-8"><IconCircleCheck className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" /><p className="text-muted-foreground">Belum ada aspirasi yang selesai</p></div>
+            ) : (
+              <div className="space-y-3">{aspirasiList.filter((a) => a.status === "Selesai").map((item) => (
+                <div key={item.id} className="p-4 rounded-xl bg-success/5 border border-success/20">
+                  <div className="flex items-center justify-between mb-2"><span className="text-xs font-mono text-muted-foreground">{item.id}</span><Badge className="bg-success/10 text-success border-0 hover:bg-success/10">Selesai</Badge></div>
+                  <h4 className="font-semibold text-foreground mb-1">{item.judul}</h4><p className="text-sm text-muted-foreground mb-2">{item.deskripsi}</p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="flex items-center gap-1"><IconMapPin className="w-3 h-3" />{item.desa}</span><span className="flex items-center gap-1"><IconClock className="w-3 h-3" />{item.tanggal}</span></div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Aspirasi Selesai</h3>
-                  <p className="text-sm text-muted">{aspirasiSelesai} aspirasi telah diselesaikan</p>
-                </div>
-              </div>
-              <button onClick={() => setStatBubbleModal(null)} className="w-10 h-10 rounded-xl bg-accent-light flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-              {aspirasiList.filter((a) => a.status === "Selesai").length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckCircle className="w-12 h-12 text-muted/30 mx-auto mb-3" />
-                  <p className="text-muted">Belum ada aspirasi yang selesai</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {aspirasiList.filter((a) => a.status === "Selesai").map((item) => (
-                    <div key={item.id} className="p-4 rounded-xl bg-success/5 border border-success/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-mono text-muted">{item.id}</span>
-                        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-success/10 text-success">Selesai</span>
-                      </div>
-                      <h4 className="font-semibold text-foreground mb-1">{item.judul}</h4>
-                      <p className="text-sm text-muted mb-2">{item.deskripsi}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted">
-                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{item.desa}</span>
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.tanggal}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+              ))}</div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Modal: Picker Avatar === */}
+      <Dialog open={showAvatarPicker} onOpenChange={setShowAvatarPicker}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Pilih Avatar</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-4 gap-3">
+            {["👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫", "👩‍⚕️", "👨‍⚕️", "👩‍🍳", "👨‍🍳", "🧑‍🎓", "🧑‍💻", "🧑‍🔬", "🧑‍🎨"].map((a) => (
+              <Button key={a} type="button" variant="outline" onClick={() => { setProfilePhoto(a); setShowAvatarPicker(false); }} className={`w-full aspect-square text-3xl border-2 ${profilePhoto === a ? "border-primary bg-primary/5" : "border-border"}`}>{a}</Button>
+            ))}
           </div>
-        </div>
-      )}
+          <Button variant="ghost" onClick={() => { setProfilePhoto(null); setShowAvatarPicker(false); }} className="w-full text-muted-foreground hover:text-foreground">Hapus Foto (Gunakan Default)</Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
