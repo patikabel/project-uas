@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
@@ -14,7 +13,6 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   IconMessage,
   IconClipboardList,
@@ -63,8 +61,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -79,18 +76,6 @@ const kandidatSchema = z.object({
   nama: z.string().min(2, "Nama harus minimal 2 karakter"),
   visi: z.string().min(10, "Visi harus minimal 10 karakter"),
 });
-
-// === Schema validasi Zod: form ganti kata sandi ===
-const passwordSchema = z
-  .object({
-    oldPassword: z.string().min(1, "Kata sandi lama harus diisi"),
-    newPassword: z.string().min(6, "Kata sandi baru minimal 6 karakter"),
-    confirmPassword: z.string().min(1, "Konfirmasi harus diisi"),
-  })
-  .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Konfirmasi kata sandi tidak cocok",
-    path: ["confirmPassword"],
-  });
 
 // === Warna badge status ===
 const STATUS_COLORS: Record<string, string> = {
@@ -196,13 +181,6 @@ const chatRooms: ChatRoom[] = [
   { id: 3, wargaName: "Maya Putri", role: "Warga Desa Klandasan", status: "offline", lastMessage: "", lastTime: "", messages: [] },
 ];
 
-// === Balasan otomatis admin ===
-const autoReplies: Record<string, string[]> = {
-  "Rina Wati": ["Terima kasih atas aspirasinya. Kami akan segera menindaklanjuti.", "Laporan Anda sudah kami terima dan akan diproses."],
-  "Supriadi": ["Halo! Ada yang bisa kami bantu?", "Kami akan koordinasi dengan tim terkait."],
-  "Maya Putri": ["Terima kasih pesannya. Akan segera kami tindaklanjuti.", "Kami catat laporan Anda. Terima kasih."],
-};
-
 // === Papan publik data ===
 const papanPublikData = [
   { id: 1, desa: "Desa Batu Ampar", judul: "Perbaikan Jalan Rusak di RT 05", kategori: "Infrastruktur", votes: 234, status: "Aktif", waktu: "2 jam lalu", deskripsi: "Jalan di RT 05 mengalami kerusakan parah." },
@@ -252,11 +230,12 @@ export default function AdminDashboardPage() {
   const [formBeritaDeskripsi, setFormBeritaDeskripsi] = useState("");
   const [formBeritaKonten, setFormBeritaKonten] = useState("");
   const [formBeritaGambar, setFormBeritaGambar] = useState("https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&h=400&fit=crop");
-  const [selectedBeritaDetail, setSelectedBeritaDetail] = useState<(typeof beritaList)[0] | null>(null);
-
   // === State form kandidat ===
   const [showFormKandidat, setShowFormKandidat] = useState(false);
   const [showEditKandidat, setShowEditKandidat] = useState(false);
+  const [nextKandidatId, setNextKandidatId] = useState(() => {
+    return initialKandidatList.reduce((max, k) => Math.max(max, k.id), 0) + 1;
+  });
   const [editKandidatId, setEditKandidatId] = useState<number | null>(null);
   const [formKandidatNama, setFormKandidatNama] = useState("");
   const [formKandidatVisi, setFormKandidatVisi] = useState("");
@@ -321,15 +300,28 @@ export default function AdminDashboardPage() {
         }));
       }
     } catch {}
-    // Load data voting dari warga via localStorage
+    // Load semua data voting dari warga via localStorage (format: array per NIK)
     try {
-      const voteData = JSON.parse(localStorage.getItem("voting_data") || "{}");
-      if (voteData.voted && voteData.candidateId) {
-        setKandidatList((prev) => prev.map((k) =>
-          k.id === voteData.candidateId ? { ...k, suara: k.suara + 1 } : k
-        ));
-      }
+      const allVotes: Array<{ candidateId: number; voterNIK: string }> = JSON.parse(localStorage.getItem("voting_data") || "[]");
+      setKandidatList(initialKandidatList.map((k) => {
+        const count = allVotes.filter((v) => v.candidateId === k.id).length;
+        return { ...k, suara: k.suara + count };
+      }));
     } catch {}
+    // Listen for storage changes from other tabs (warga voting)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "voting_data") {
+        try {
+          const allVotes: Array<{ candidateId: number; voterNIK: string }> = JSON.parse(e.newValue || "[]");
+          setKandidatList(initialKandidatList.map((k) => {
+            const count = allVotes.filter((v) => v.candidateId === k.id).length;
+            return { ...k, suara: k.suara + count };
+          }));
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
     // Load berita dari localStorage
     try {
       const stored = JSON.parse(localStorage.getItem("berita_list") || "[]");
@@ -380,12 +372,12 @@ export default function AdminDashboardPage() {
         <Button variant="ghost" size="sm" onClick={(e) => {
           e.stopPropagation();
           if (!confirm(`Hapus aspirasi "${row.original.judul}"?`)) return;
-          setAspirasiList(aspirasiList.filter((a) => a.id !== row.original.id));
+          setAspirasiList((prev) => prev.filter((a) => a.id !== row.original.id));
           try {
             const stored = JSON.parse(localStorage.getItem("aspirasi_warga") || "[]");
             localStorage.setItem("aspirasi_warga", JSON.stringify(stored.filter((a: Aspirasi) => a.id !== row.original.id)));
           } catch {}
-          setNotifications([{ id: Date.now(), type: "aspirasi" as const, title: "Aspirasi Dihapus", message: `"${row.original.judul}" telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+          setNotifications((prev) => [{ id: Date.now(), type: "aspirasi" as const, title: "Aspirasi Dihapus", message: `"${row.original.judul}" telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...prev]);
           toast.success("Aspirasi Dihapus!", {
             description: `"${row.original.judul}" telah berhasil dihapus.`,
           });
@@ -429,73 +421,6 @@ export default function AdminDashboardPage() {
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
-
-  // === Handler: download laporan PDF ===
-  const handleDownloadLaporan = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Header gradient pink
-    doc.setFillColor(201, 61, 114);
-    doc.rect(0, 0, pageWidth, 40, "F");
-    doc.setFillColor(224, 114, 154);
-    doc.rect(0, 35, pageWidth, 8, "F");
-
-    // Judul
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("LAPORAN AZELINA.ID", pageWidth / 2, 18, { align: "center" });
-    doc.setFontSize(10); doc.setFont("helvetica", "normal");
-    doc.text("Platform E-Voting & Aspirasi Anonim", pageWidth / 2, 26, { align: "center" });
-    doc.text(`Dicetak: ${new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}`, pageWidth / 2, 33, { align: "center" });
-
-    let y = 52;
-    doc.setTextColor(0, 0, 0);
-
-    // Ringkasan statistik
-    doc.setFillColor(252, 228, 239);
-    doc.roundedRect(14, y, pageWidth - 28, 36, 3, 3, "F");
-    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
-    doc.text("Ringkasan Statistik", 20, y + 8);
-    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
-    doc.text(`Total Aspirasi: ${aspirasiList.length}`, 20, y + 16);
-    doc.text(`Diterima: ${aspirasiDiterima}  |  Diproses: ${aspirasiDiproses}  |  Selesai: ${aspirasiSelesai}`, 20, y + 22);
-    doc.text(`Warga Aktif: ${wargaAktif} dari ${wargaList.length}`, 20, y + 28);
-    doc.text(`Total Suara Voting: ${totalSuara.toLocaleString("id-ID")}`, 20, y + 34);
-    y += 44;
-
-    // Garis pemisah
-    doc.setDrawColor(201, 61, 114); doc.setLineWidth(0.5);
-    doc.line(14, y, pageWidth - 14, y); y += 8;
-
-    // Tabel Aspirasi
-    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
-    doc.text("Data Aspirasi", 14, y); y += 4;
-    autoTable(doc, { startY: y, head: [["ID", "Judul", "Kategori", "Desa", "Tanggal", "Status"]], body: aspirasiList.map((a) => [a.id, a.judul, a.kategori, a.desa, a.tanggal, a.status]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [201, 61, 114], textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [252, 228, 239] }, margin: { left: 14, right: 14 } });
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
-
-    // Garis pemisah
-    doc.setDrawColor(201, 61, 114); doc.setLineWidth(0.5);
-    doc.line(14, y, pageWidth - 14, y); y += 8;
-
-    // Tabel Voting
-    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(201, 61, 114);
-    doc.text("Hasil Voting", 14, y); y += 4;
-    autoTable(doc, { startY: y, head: [["No", "Kandidat", "Visi", "Suara", "Persentase"]], body: [...kandidatList].sort((a, b) => b.suara - a.suara).map((k, i) => [String(i + 1), k.nama, k.visi.length > 50 ? k.visi.substring(0, 50) + "..." : k.visi, k.suara.toLocaleString("id-ID"), `${((k.suara / totalSuara) * 100).toFixed(1)}%`]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [201, 61, 114], textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [252, 228, 239] }, margin: { left: 14, right: 14 } });
-
-    // Footer
-    const totalPages = doc.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setFillColor(201, 61, 114);
-      doc.rect(0, doc.internal.pageSize.getHeight() - 12, pageWidth, 12, "F");
-      doc.setFontSize(8); doc.setFont("helvetica", "normal");
-      doc.setTextColor(255, 255, 255);
-      doc.text("Azelina.id - E-Voting & Aspirasi Anonim", pageWidth / 2, doc.internal.pageSize.getHeight() - 5, { align: "center" });
-    }
-
-    doc.save("laporan-azelina.pdf");
-  };
 
   // === Handler: download aspirasi PDF ===
   const handleDownloadAspirasiPdf = (aspirasi: Aspirasi) => {
@@ -573,6 +498,21 @@ export default function AdminDashboardPage() {
       if (room.id === currentRoom.id) { const u = { ...room, messages: [...room.messages, newMsg], lastMessage: chatMessage, lastTime: "Sekarang" }; setSelectedChatRoom(u); return u; } return room;
     });
     setChatRoomsList(updatedRooms); setChatMessage("");
+  };
+
+  // === Handler: refresh data voting dari localStorage ===
+  const handleRefreshVoting = () => {
+    try {
+      const allVotes: Array<{ candidateId: number; voterNIK: string }> = JSON.parse(localStorage.getItem("voting_data") || "[]");
+      // Recalculate dari data awal + vote warga
+      setKandidatList(initialKandidatList.map((k) => {
+        const count = allVotes.filter((v) => v.candidateId === k.id).length;
+        return { ...k, suara: k.suara + count };
+      }));
+      toast.success("Data voting diperbarui!", { description: `Total ${allVotes.length} suara warga tercatat.` });
+    } catch {
+      toast.error("Gagal memuat data voting");
+    }
   };
 
   // === Menu sidebar ===
@@ -818,7 +758,10 @@ export default function AdminDashboardPage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-foreground">Kelola Voting</h3>
-                <Button onClick={() => setShowFormKandidat(true)} className="bg-primary text-white hover:bg-primary-dark shadow-sm"><IconUser className="w-4 h-4 mr-2" /> Tambah Kandidat</Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleRefreshVoting} variant="outline" className="border-border"><IconClipboardList className="w-4 h-4 mr-2" /> Refresh Suara</Button>
+                  <Button onClick={() => setShowFormKandidat(true)} className="bg-primary text-white hover:bg-primary-dark shadow-sm"><IconUser className="w-4 h-4 mr-2" /> Tambah Kandidat</Button>
+                </div>
               </div>
               <Card className="border-border">
                 <CardContent className="p-6">
@@ -831,7 +774,7 @@ export default function AdminDashboardPage() {
                       <div key={k.id} onClick={() => setSelectedKandidatDetail(k)} className="p-5 rounded-xl border-2 border-border hover:border-accent transition-all cursor-pointer">
                         <div className="flex items-center justify-end gap-1 mb-2">
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditKandidatId(k.id); setFormKandidatNama(k.nama); setFormKandidatVisi(k.visi); setFormKandidatFoto(k.foto); setShowEditKandidat(true); }} className="hover:text-primary"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></Button>
-                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); if (confirm(`Hapus kandidat ${k.nama}?`)) { setKandidatList(kandidatList.filter((x) => x.id !== k.id)); setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Dihapus", message: `${k.nama} telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); toast.success("Kandidat Dihapus!", { description: `${k.nama} telah berhasil dihapus.` }); } }} className="hover:text-red-500"><IconTrash className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); if (confirm(`Hapus kandidat ${k.nama}?`)) { setKandidatList((prev) => prev.filter((x) => x.id !== k.id)); setNotifications((prev) => [{ id: Date.now(), type: "aspirasi", title: "Kandidat Dihapus", message: `${k.nama} telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...prev]); toast.success("Kandidat Dihapus!", { description: `${k.nama} telah berhasil dihapus.` }); } }} className="hover:text-red-500"><IconTrash className="w-4 h-4" /></Button>
                         </div>
                         <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center mx-auto mb-3 text-3xl">{k.foto}</div>
                         <h5 className="font-bold text-foreground text-center mb-1">{k.nama}</h5>
@@ -1167,14 +1110,18 @@ export default function AdminDashboardPage() {
           <form onSubmit={(e) => {
             e.preventDefault();
             const r = kandidatSchema.safeParse({ nama: formKandidatNama, visi: formKandidatVisi });
-            if (!r.success) return;
+            if (!r.success) {
+              toast.error("Form tidak lengkap!", { description: r.error.issues.map((i) => i.message).join(". ") });
+              return;
+            }
             if (showEditKandidat && editKandidatId) {
-              setKandidatList(kandidatList.map((k) => k.id === editKandidatId ? { ...k, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto } : k));
-              setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Diperbarui", message: `Data ${formKandidatNama} berhasil diperbarui`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+              setKandidatList((prev) => prev.map((k) => k.id === editKandidatId ? { ...k, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto } : k));
+              setNotifications((prev) => [{ id: Date.now(), type: "aspirasi", title: "Kandidat Diperbarui", message: `Data ${formKandidatNama} berhasil diperbarui`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...prev]);
               toast.success("Kandidat Diperbarui!", { description: `Data ${formKandidatNama} berhasil diperbarui.` });
             } else {
-              setKandidatList([...kandidatList, { id: kandidatList.length + 1, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto, suara: 0 }]);
-              setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Ditambahkan", message: `${formKandidatNama} berhasil ditambahkan`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+              setKandidatList((prev) => [...prev, { id: nextKandidatId, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto, suara: 0 }]);
+              setNextKandidatId((prev) => prev + 1);
+              setNotifications((prev) => [{ id: Date.now(), type: "aspirasi", title: "Kandidat Ditambahkan", message: `${formKandidatNama} berhasil ditambahkan`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...prev]);
               toast.success("Kandidat Ditambahkan!", { description: `${formKandidatNama} berhasil ditambahkan.` });
             }
             setFormKandidatNama(""); setFormKandidatVisi(""); setFormKandidatFoto("👤"); setShowFormKandidat(false); setShowEditKandidat(false); setEditKandidatId(null);

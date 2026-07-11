@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { z } from "zod";
@@ -201,7 +201,22 @@ export default function DashboardPage() {
   // === State data ===
   const [aspirasiList, setAspirasiList] = useState<Aspirasi[]>([]);
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
-  const [chatRoomsList, setChatRoomsList] = useState<ChatRoom[]>(chatRooms);
+  const [chatRoomsList, setChatRoomsList] = useState<ChatRoom[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
+      if (stored.length > 0) {
+        return chatRooms.map((room) => {
+          const roomMessages = stored.filter((m: ChatMessage & { roomId: number }) => m.roomId === room.id);
+          if (roomMessages.length > 0) {
+            const lastMsg = roomMessages[roomMessages.length - 1];
+            return { ...room, messages: roomMessages, lastMessage: lastMsg.text, lastTime: lastMsg.time };
+          }
+          return room;
+        });
+      }
+    } catch {}
+    return chatRooms;
+  });
   const [selectedChatRoom, setSelectedChatRoom] = useState<ChatRoom | null>(null);
   const [chatMessage, setChatMessage] = useState("");
   const [votedPapanIds, setVotedPapanIds] = useState<number[]>([]);
@@ -216,55 +231,39 @@ export default function DashboardPage() {
 
   // === State profil ===
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileName, setProfileName] = useState("Warga");
-  const [profileEmail, setProfileEmail] = useState("");
-  const [profilePhone, setProfilePhone] = useState("");
-  const [profileAddress, setProfileAddress] = useState("");
-  const [profileDesa, setProfileDesa] = useState("Desa Batu Ampar");
+  const [profileName, setProfileName] = useState(() => {
+    try { const raw = localStorage.getItem("registrasi_user"); if (raw) { const u = JSON.parse(raw); if (u.nama) return u.nama; } } catch {} return "Warga";
+  });
+  const [profileEmail, setProfileEmail] = useState(() => {
+    try { const raw = localStorage.getItem("registrasi_user"); if (raw) { const u = JSON.parse(raw); if (u.email) return u.email; } } catch {} return "";
+  });
+  const [profilePhone, setProfilePhone] = useState(() => {
+    try { const raw = localStorage.getItem("registrasi_user"); if (raw) { const u = JSON.parse(raw); if (u.telepon) return u.telepon; } } catch {} return "";
+  });
+  const [profileAddress, setProfileAddress] = useState(() => {
+    try { const raw = localStorage.getItem("registrasi_user"); if (raw) { const u = JSON.parse(raw); if (u.alamat) return u.alamat; } } catch {} return "";
+  });
+  const [profileDesa, setProfileDesa] = useState(() => {
+    try { const raw = localStorage.getItem("registrasi_user"); if (raw) { const u = JSON.parse(raw); if (u.desa) return u.desa; } } catch {} return "Desa Batu Ampar";
+  });
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // === Load data registrasi dari localStorage ===
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("registrasi_user");
-      if (raw) {
-        const user = JSON.parse(raw);
-        if (user.nama) setProfileName(user.nama);
-        if (user.email) setProfileEmail(user.email);
-        if (user.telepon) setProfilePhone(user.telepon);
-        if (user.alamat) setProfileAddress(user.alamat);
-        if (user.desa) setProfileDesa(user.desa);
-      }
-    } catch {}
-    // Load chat dari localStorage
-    try {
-      const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
-      if (stored.length > 0) {
-        setChatRoomsList((prev) => prev.map((room) => {
-          const roomMessages = stored.filter((m: ChatMessage & { roomId: number }) => m.roomId === room.id);
-          if (roomMessages.length > 0) {
-            const lastMsg = roomMessages[roomMessages.length - 1];
-            return { ...room, messages: roomMessages, lastMessage: lastMsg.text, lastTime: lastMsg.time };
-          }
-          return room;
-        }));
-      }
-    } catch {}
-    // Load status voting dari localStorage
-    try {
-      const voteData = JSON.parse(localStorage.getItem("voting_data") || "{}");
-      if (voteData.voted) {
-        setHasVoted(true);
-      }
-    } catch {}
-  }, []);
-
   // === State voting ===
   const [selectedKandidat, setSelectedKandidat] = useState<number | null>(null);
   const [showVotingSuccess, setShowVotingSuccess] = useState(false);
-  const [hasVoted, setHasVoted] = useState(false);
+  const [hasVoted, setHasVoted] = useState(() => {
+    try {
+      const userRaw = localStorage.getItem("registrasi_user");
+      if (!userRaw) return false;
+      const user = JSON.parse(userRaw);
+      const nik = user.nik || "";
+      if (!nik) return false;
+      const allVotes: Array<{ candidateId: number; voterNIK: string }> = JSON.parse(localStorage.getItem("voting_data") || "[]");
+      return allVotes.some((v) => v.voterNIK === nik);
+    } catch {} return false;
+  });
 
   // === State modals ===
   const [selectedAspirasi, setSelectedAspirasi] = useState<Aspirasi | null>(null);
@@ -614,9 +613,16 @@ export default function DashboardPage() {
                       {selectedKandidat && (
                         <div className="mt-6 text-center">
                           <Button onClick={() => {
-                            // Simpan vote ke localStorage
+                            // Simpan vote ke localStorage (per NIK)
                             try {
-                              localStorage.setItem("voting_data", JSON.stringify({ voted: true, candidateId: selectedKandidat }));
+                              const userRaw = localStorage.getItem("registrasi_user");
+                              const user = userRaw ? JSON.parse(userRaw) : {};
+                              const nik = user.nik || "";
+                              const allVotes: Array<{ candidateId: number; voterNIK: string }> = JSON.parse(localStorage.getItem("voting_data") || "[]");
+                              if (!allVotes.some((v) => v.voterNIK === nik)) {
+                                allVotes.push({ candidateId: selectedKandidat, voterNIK: nik });
+                                localStorage.setItem("voting_data", JSON.stringify(allVotes));
+                              }
                             } catch {}
                             setShowVotingSuccess(true);
                           }} className="bg-primary text-white hover:bg-primary-dark shadow-sm">

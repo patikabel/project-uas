@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import {
   IconClipboardList,
@@ -36,26 +36,23 @@ const desaData = [
 
 // Halaman hasil voting publik
 export default function HasilVotingPage() {
-  const [kandidatList, setKandidatList] = useState(kandidatData);
+  const [kandidatList] = useState(() => {
+    try {
+      const allVotes: Array<{ candidateId: number; voterNIK: string }> = JSON.parse(localStorage.getItem("voting_data") || "[]");
+      if (allVotes.length > 0) {
+        return kandidatData.map((k) => {
+          const count = allVotes.filter((v) => v.candidateId === k.id).length;
+          return { ...k, suara: k.suara + count };
+        });
+      }
+    } catch {}
+    return kandidatData;
+  });
   const totalSuara = kandidatList.reduce((sum, k) => sum + k.suara, 0);
   const totalDesa = desaData.length;
   const totalPartisipan = desaData.reduce((sum, d) => sum + d.suara, 0);
   const totalPemilih = desaData.reduce((sum, d) => sum + d.total, 0);
   const rataPartisipasi = Math.round((totalPartisipan / totalPemilih) * 100);
-
-  // Load data voting dari localStorage (warga yang udah vote)
-  useEffect(() => {
-    try {
-      const voteData = JSON.parse(localStorage.getItem("voting_data") || "{}");
-      if (voteData.voted && voteData.candidateId) {
-        setKandidatList((prev) =>
-          prev.map((k) =>
-            k.id === voteData.candidateId ? { ...k, suara: k.suara + 1 } : k
-          )
-        );
-      }
-    } catch {}
-  }, []);
 
   return (
     <div className="flex flex-col min-h-screen">

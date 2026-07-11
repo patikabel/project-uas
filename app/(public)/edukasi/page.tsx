@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   IconBook,
   IconClipboardList,
@@ -316,21 +316,18 @@ export default function EdukasiPage() {
   const [selectedRight, setSelectedRight] = useState<
     (typeof voterRights)[0] | null
   >(null);
-  const [beritaData, setBeritaData] = useState(beritaList);
-  const [selectedBerita, setSelectedBerita] = useState<(typeof beritaList)[0] | null>(null);
-
-  // Load berita dari localStorage (yang diinput admin)
-  useEffect(() => {
+  const [beritaData] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("berita_list") || "[]");
       if (stored.length > 0) {
-        // Gabungkan: berita admin di atas, berita default di bawah
         const adminIds = new Set(stored.map((b: { id: number }) => b.id));
         const defaultBerita = beritaList.filter((b) => !adminIds.has(b.id));
-        setBeritaData([...stored, ...defaultBerita]);
+        return [...stored, ...defaultBerita];
       }
     } catch {}
-  }, []);
+    return beritaList;
+  });
+  const [selectedBerita, setSelectedBerita] = useState<(typeof beritaList)[0] | null>(null);
 
   return (
     <div className="flex flex-col min-h-screen">
