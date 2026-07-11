@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { z } from "zod";
+import { toast } from "sonner";
 import {
   useReactTable,
   getCoreRowModel,
@@ -38,6 +39,9 @@ import {
   IconTrendingUp,
   IconChartPie,
   IconDownload,
+  IconNews,
+  IconPlus,
+  IconEdit,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,6 +240,20 @@ export default function AdminDashboardPage() {
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
   const [papanVotes] = useState<Record<number, number>>({ 1: 234, 2: 189, 3: 156, 4: 142, 5: 128, 6: 98 });
 
+  // === State berita ===
+  const [beritaList, setBeritaList] = useState<Array<{
+    id: number; judul: string; kategori: string; deskripsi: string;
+    tanggal: string; penulis: string; gambar: string; konten: string;
+  }>>([]);
+  const [showFormBerita, setShowFormBerita] = useState(false);
+  const [editBeritaId, setEditBeritaId] = useState<number | null>(null);
+  const [formBeritaJudul, setFormBeritaJudul] = useState("");
+  const [formBeritaKategori, setFormBeritaKategori] = useState("Pemilihan");
+  const [formBeritaDeskripsi, setFormBeritaDeskripsi] = useState("");
+  const [formBeritaKonten, setFormBeritaKonten] = useState("");
+  const [formBeritaGambar, setFormBeritaGambar] = useState("https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&h=400&fit=crop");
+  const [selectedBeritaDetail, setSelectedBeritaDetail] = useState<(typeof beritaList)[0] | null>(null);
+
   // === State form kandidat ===
   const [showFormKandidat, setShowFormKandidat] = useState(false);
   const [showEditKandidat, setShowEditKandidat] = useState(false);
@@ -270,6 +288,56 @@ export default function AdminDashboardPage() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showSandiSuccess, setShowSandiSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // === Load aspirasi dari warga via localStorage (client-side only) ===
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("aspirasi_warga") || "[]");
+      if (stored.length > 0) {
+        const wargaAspirasi = stored.map((a: Aspirasi & { desa?: string }) => ({
+          id: a.id,
+          judul: a.judul,
+          kategori: a.kategori,
+          deskripsi: a.deskripsi,
+          status: a.status,
+          tanggal: a.tanggal,
+          desa: a.desa || "Desa Batu Ampar",
+        }));
+        setAspirasiList([...wargaAspirasi, ...initialAspirasiList]);
+      }
+    } catch {}
+    // Load chat dari localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
+      if (stored.length > 0) {
+        setChatRoomsList((prev) => prev.map((room) => {
+          const roomMessages = stored.filter((m: ChatMessage & { roomId: number }) => m.roomId === room.id);
+          if (roomMessages.length > 0) {
+            const lastMsg = roomMessages[roomMessages.length - 1];
+            return { ...room, messages: roomMessages, lastMessage: lastMsg.text, lastTime: lastMsg.time };
+          }
+          return room;
+        }));
+      }
+    } catch {}
+    // Load data voting dari warga via localStorage
+    try {
+      const voteData = JSON.parse(localStorage.getItem("voting_data") || "{}");
+      if (voteData.voted && voteData.candidateId) {
+        setKandidatList((prev) => prev.map((k) =>
+          k.id === voteData.candidateId ? { ...k, suara: k.suara + 1 } : k
+        ));
+      }
+    } catch {}
+    // Load berita dari localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem("berita_list") || "[]");
+      if (stored.length > 0) {
+        setBeritaList(stored);
+      }
+    } catch {}
+  }, []);
 
   // === Derived data ===
   const aspirasiDiproses = useMemo(() => aspirasiList.filter((a) => a.status === "Diproses").length, [aspirasiList]);
@@ -305,9 +373,26 @@ export default function AdminDashboardPage() {
     { accessorKey: "tanggal", header: "Tanggal" },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge className={`border-0 hover:bg-transparent ${STATUS_COLORS[row.original.status] || ""}`}>{row.original.status}</Badge> },
     { id: "aksi", header: "Aksi", cell: ({ row }) => (
-      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedAspirasi(row.original); }} className="hover:text-primary">
-        <IconEye className="w-4 h-4" />
-      </Button>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedAspirasi(row.original); }} className="hover:text-primary">
+          <IconEye className="w-4 h-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={(e) => {
+          e.stopPropagation();
+          if (!confirm(`Hapus aspirasi "${row.original.judul}"?`)) return;
+          setAspirasiList(aspirasiList.filter((a) => a.id !== row.original.id));
+          try {
+            const stored = JSON.parse(localStorage.getItem("aspirasi_warga") || "[]");
+            localStorage.setItem("aspirasi_warga", JSON.stringify(stored.filter((a: Aspirasi) => a.id !== row.original.id)));
+          } catch {}
+          setNotifications([{ id: Date.now(), type: "aspirasi" as const, title: "Aspirasi Dihapus", message: `"${row.original.judul}" telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+          toast.success("Aspirasi Dihapus!", {
+            description: `"${row.original.judul}" telah berhasil dihapus.`,
+          });
+        }} className="hover:text-red-500">
+          <IconTrash className="w-4 h-4" />
+        </Button>
+      </div>
     ) },
   ], []);
 
@@ -476,6 +561,13 @@ export default function AdminDashboardPage() {
     if (!chatMessage.trim() || !selectedChatRoom) return;
     const userTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const newMsg: ChatMessage = { id: Date.now(), sender: "petugas", name: profileName, text: chatMessage, time: userTime };
+
+    // Simpan ke localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
+      localStorage.setItem("chat_messages", JSON.stringify([...stored, { ...newMsg, roomId: selectedChatRoom.id }]));
+    } catch {}
+
     const currentRoom = selectedChatRoom;
     const updatedRooms = chatRoomsList.map((room) => {
       if (room.id === currentRoom.id) { const u = { ...room, messages: [...room.messages, newMsg], lastMessage: chatMessage, lastTime: "Sekarang" }; setSelectedChatRoom(u); return u; } return room;
@@ -490,6 +582,7 @@ export default function AdminDashboardPage() {
       { icon: IconMessage, label: "Kelola Aspirasi", href: "#aspirasi" },
       { icon: IconClipboardList, label: "Kelola Voting", href: "#voting" },
       { icon: IconUsers, label: "Kelola Warga", href: "#warga" },
+      { icon: IconNews, label: "Kelola Berita", href: "#berita" },
       { icon: IconWorld, label: "Papan Publik", href: "#papan" },
     ]},
     { label: "Komunikasi", items: [{ icon: IconHeadphones, label: "Chat Warga", href: "#chat" }] },
@@ -535,7 +628,7 @@ export default function AdminDashboardPage() {
           <div className="flex items-center justify-between w-full px-6">
             <div className="flex items-center gap-4">
               <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-foreground"><IconMenu className="w-6 h-6" /></button>
-              <div><h2 className="text-lg font-bold text-foreground">Selamat Datang, Admin!</h2><p className="text-sm text-muted-foreground">Kelola platform Azelina.id</p></div>
+              <div><h2 className="text-lg font-bold text-foreground">Selamat Datang, {profileName}!</h2><p className="text-sm text-muted-foreground">Kelola platform Azelina.id</p></div>
             </div>
             <div className="flex items-center gap-4">
               {/* Notifikasi */}
@@ -571,16 +664,24 @@ export default function AdminDashboardPage() {
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center"><IconSettings className="w-5 h-5 text-primary" /></div>
+                {profilePhoto ? (
+                  profilePhoto.startsWith("data:") ? (
+                    <img src={profilePhoto} alt="Foto Profil" className="w-9 h-9 rounded-xl object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xl">{profilePhoto}</div>
+                  )
+                ) : (
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center"><IconSettings className="w-5 h-5 text-primary" /></div>
+                )}
                 <div className="hidden sm:block"><p className="text-sm font-semibold text-foreground">{profileName}</p><p className="text-xs text-primary font-medium">Administrator</p></div>
               </div>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           {/* === Statistik ringkas === */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
             {[
               { onClick: () => setStatBubbleModal("aspirasi"), value: aspirasiList.length, label: "Total Aspirasi", icon: IconMessage, color: "text-primary" },
               { onClick: () => setStatBubbleModal("warga"), value: wargaAktif, label: "Warga Aktif", icon: IconUsers, color: "text-primary-light" },
@@ -588,10 +689,10 @@ export default function AdminDashboardPage() {
               { onClick: () => setStatBubbleModal("selesai"), value: aspirasiSelesai, label: "Aspirasi Selesai", icon: IconTrendingUp, color: "text-primary" },
             ].map((stat) => (
               <Card key={stat.label} onClick={stat.onClick} className="stat-card border-2 border-amber-300 hover:bg-accent-light hover:border-primary transition-all cursor-pointer group">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors"><stat.icon className={`w-5 h-5 ${stat.color} group-hover:text-primary transition-colors`} /></div>
-                    <div><p className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{stat.value}</p><p className="text-xs text-muted-foreground group-hover:text-primary transition-colors">{stat.label}</p></div>
+                <CardContent className="p-3 sm:p-5">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-accent-light group-hover:bg-primary/10 flex items-center justify-center transition-colors"><stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.color} group-hover:text-primary transition-colors`} /></div>
+                    <div><p className="text-lg sm:text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{stat.value}</p><p className="text-[10px] sm:text-xs text-muted-foreground group-hover:text-primary transition-colors">{stat.label}</p></div>
                   </div>
                 </CardContent>
               </Card>
@@ -730,7 +831,7 @@ export default function AdminDashboardPage() {
                       <div key={k.id} onClick={() => setSelectedKandidatDetail(k)} className="p-5 rounded-xl border-2 border-border hover:border-accent transition-all cursor-pointer">
                         <div className="flex items-center justify-end gap-1 mb-2">
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditKandidatId(k.id); setFormKandidatNama(k.nama); setFormKandidatVisi(k.visi); setFormKandidatFoto(k.foto); setShowEditKandidat(true); }} className="hover:text-primary"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></Button>
-                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); if (confirm(`Hapus kandidat ${k.nama}?`)) { setKandidatList(kandidatList.filter((x) => x.id !== k.id)); setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Dihapus", message: `${k.nama} telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); } }} className="hover:text-red-500"><IconTrash className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); if (confirm(`Hapus kandidat ${k.nama}?`)) { setKandidatList(kandidatList.filter((x) => x.id !== k.id)); setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Dihapus", message: `${k.nama} telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); toast.success("Kandidat Dihapus!", { description: `${k.nama} telah berhasil dihapus.` }); } }} className="hover:text-red-500"><IconTrash className="w-4 h-4" /></Button>
                         </div>
                         <div className="w-16 h-16 rounded-xl bg-accent-light flex items-center justify-center mx-auto mb-3 text-3xl">{k.foto}</div>
                         <h5 className="font-bold text-foreground text-center mb-1">{k.nama}</h5>
@@ -817,6 +918,72 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
+          {/* === Section: Kelola Berita === */}
+          {activeSection === "berita" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">Kelola Berita</h3>
+                  <p className="text-sm text-muted-foreground">Tambah, edit, atau hapus berita desa</p>
+                </div>
+                <Button onClick={() => { setEditBeritaId(null); setFormBeritaJudul(""); setFormBeritaKategori("Pemilihan"); setFormBeritaDeskripsi(""); setFormBeritaKonten(""); setFormBeritaGambar("https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&h=400&fit=crop"); setShowFormBerita(true); }} className="bg-primary text-white hover:bg-primary-dark shadow-sm">
+                  <IconPlus className="w-4 h-4 mr-2" /> Tambah Berita
+                </Button>
+              </div>
+              {beritaList.length === 0 ? (
+                <Card className="border-border">
+                  <CardContent className="p-8 text-center">
+                    <IconNews className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-muted-foreground">Belum ada berita</p>
+                    <p className="text-xs text-muted-foreground mt-1">Klik &quot;Tambah Berita&quot; untuk membuat berita baru</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {beritaList.map((berita) => (
+                    <Card key={berita.id} className="border-border hover:shadow-md transition-all overflow-hidden">
+                      <div className="relative h-40 overflow-hidden">
+                        <img src={berita.gambar} alt={berita.judul} className="w-full h-full object-cover" />
+                        <div className="absolute top-2 left-2">
+                          <Badge className="bg-primary/10 text-primary border-0 hover:bg-primary/10">{berita.kategori}</Badge>
+                        </div>
+                      </div>
+                      <CardContent className="p-4">
+                        <h5 className="font-bold text-foreground mb-1 line-clamp-1">{berita.judul}</h5>
+                        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{berita.deskripsi}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">{berita.tanggal}</span>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              setEditBeritaId(berita.id);
+                              setFormBeritaJudul(berita.judul);
+                              setFormBeritaKategori(berita.kategori);
+                              setFormBeritaDeskripsi(berita.deskripsi);
+                              setFormBeritaKonten(berita.konten);
+                              setFormBeritaGambar(berita.gambar);
+                              setShowFormBerita(true);
+                            }} className="hover:text-primary h-8 w-8 p-0">
+                              <IconEdit className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              if (!confirm(`Hapus berita "${berita.judul}"?`)) return;
+                              const updated = beritaList.filter((b) => b.id !== berita.id);
+                              setBeritaList(updated);
+                              localStorage.setItem("berita_list", JSON.stringify(updated));
+                              toast.success("Berita Dihapus!", { description: `"${berita.judul}" telah dihapus.` });
+                            }} className="hover:text-red-500 h-8 w-8 p-0">
+                              <IconTrash className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* === Section: Chat Warga === */}
           {activeSection === "chat" && (
             <div className="flex gap-6 h-[calc(100vh-200px)]">
@@ -874,7 +1041,23 @@ export default function AdminDashboardPage() {
               <Card className="border-border"><CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6 pb-6 border-b border-border">
                   <div className="relative group">
-                    {profilePhoto ? <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" /> : <div className="w-20 h-20 rounded-xl bg-primary/10 flex items-center justify-center border-2 border-amber-400"><IconSettings className="w-10 h-10 text-primary" /></div>}
+                    {profilePhoto ? (
+                      profilePhoto.startsWith("data:") ? (
+                        <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" />
+                      ) : (
+                        <div className="w-20 h-20 rounded-xl bg-primary/10 flex items-center justify-center border-2 border-amber-400 text-4xl">{profilePhoto}</div>
+                      )
+                    ) : (
+                      <div className="w-20 h-20 rounded-xl bg-primary/10 flex items-center justify-center border-2 border-amber-400"><IconSettings className="w-10 h-10 text-primary" /></div>
+                    )}
+                    {isEditingProfile && (
+                      <div className="absolute inset-0 rounded-xl flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 bg-black/50 rounded-xl" />
+                        <button onClick={() => setShowAvatarPicker(true)} className="relative z-10 p-1.5 bg-primary rounded-lg text-white hover:bg-primary-dark transition-colors">
+                          <IconUser className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div><h4 className="text-lg font-bold text-foreground">{profileName}</h4><p className="text-sm text-primary font-medium">Administrator &bull; {profileDesa}</p></div>
                 </div>
@@ -916,6 +1099,22 @@ export default function AdminDashboardPage() {
             <DialogTitle>Detail Aspirasi</DialogTitle><p className="text-sm text-muted-foreground">{selectedAspirasi?.id}</p>
             <div className="flex items-center gap-2 mt-2">
               <Button size="sm" onClick={() => selectedAspirasi && handleDownloadAspirasiPdf(selectedAspirasi)} className="bg-primary text-white hover:bg-primary-dark"><IconDownload className="w-3.5 h-3.5 mr-1" /> PDF</Button>
+              <Button size="sm" variant="destructive" onClick={() => {
+                if (!selectedAspirasi) return;
+                if (!confirm(`Hapus aspirasi "${selectedAspirasi.judul}"?`)) return;
+                // Hapus dari state
+                setAspirasiList(aspirasiList.filter((a) => a.id !== selectedAspirasi.id));
+                // Hapus dari localStorage
+                try {
+                  const stored = JSON.parse(localStorage.getItem("aspirasi_warga") || "[]");
+                  localStorage.setItem("aspirasi_warga", JSON.stringify(stored.filter((a: Aspirasi) => a.id !== selectedAspirasi.id)));
+                } catch {}
+                setSelectedAspirasi(null);
+                setNotifications([{ id: Date.now(), type: "aspirasi" as const, title: "Aspirasi Dihapus", message: `"${selectedAspirasi.judul}" telah dihapus`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+                toast.success("Aspirasi Dihapus!", {
+                  description: `"${selectedAspirasi.judul}" telah berhasil dihapus.`,
+                });
+              }} className="hover:bg-red-600"><IconTrash className="w-3.5 h-3.5 mr-1" /> Hapus</Button>
             </div>
           </DialogHeader>
           <div className="space-y-4">
@@ -972,9 +1171,11 @@ export default function AdminDashboardPage() {
             if (showEditKandidat && editKandidatId) {
               setKandidatList(kandidatList.map((k) => k.id === editKandidatId ? { ...k, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto } : k));
               setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Diperbarui", message: `Data ${formKandidatNama} berhasil diperbarui`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+              toast.success("Kandidat Diperbarui!", { description: `Data ${formKandidatNama} berhasil diperbarui.` });
             } else {
               setKandidatList([...kandidatList, { id: kandidatList.length + 1, nama: formKandidatNama, visi: formKandidatVisi, foto: formKandidatFoto, suara: 0 }]);
               setNotifications([{ id: Date.now(), type: "aspirasi", title: "Kandidat Ditambahkan", message: `${formKandidatNama} berhasil ditambahkan`, time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+              toast.success("Kandidat Ditambahkan!", { description: `${formKandidatNama} berhasil ditambahkan.` });
             }
             setFormKandidatNama(""); setFormKandidatVisi(""); setFormKandidatFoto("👤"); setShowFormKandidat(false); setShowEditKandidat(false); setEditKandidatId(null);
           }} className="space-y-5">
@@ -1136,10 +1337,72 @@ export default function AdminDashboardPage() {
         </DialogContent>
       </Dialog>
 
+      {/* === Modal: Tambah/Edit Berita === */}
+      <Dialog open={showFormBerita} onOpenChange={(o) => { if (!o) { setShowFormBerita(false); setEditBeritaId(null); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader><DialogTitle>{editBeritaId ? "Edit" : "Tambah"} Berita</DialogTitle></DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-120px)]">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!formBeritaJudul.trim() || !formBeritaDeskripsi.trim() || !formBeritaKonten.trim()) return;
+              const now = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+              if (editBeritaId) {
+                const updated = beritaList.map((b) => b.id === editBeritaId ? { ...b, judul: formBeritaJudul, kategori: formBeritaKategori, deskripsi: formBeritaDeskripsi, konten: formBeritaKonten, gambar: formBeritaGambar } : b);
+                setBeritaList(updated);
+                localStorage.setItem("berita_list", JSON.stringify(updated));
+                toast.success("Berita Diperbarui!", { description: `"${formBeritaJudul}" berhasil diperbarui.` });
+              } else {
+                const newBerita = { id: Date.now(), judul: formBeritaJudul, kategori: formBeritaKategori, deskripsi: formBeritaDeskripsi, konten: formBeritaKonten, gambar: formBeritaGambar, tanggal: now, penulis: profileName };
+                const updated = [newBerita, ...beritaList];
+                setBeritaList(updated);
+                localStorage.setItem("berita_list", JSON.stringify(updated));
+                toast.success("Berita Ditambahkan!", { description: `"${formBeritaJudul}" berhasil ditambahkan.` });
+              }
+              setShowFormBerita(false); setEditBeritaId(null);
+            }} className="space-y-4">
+              <div><Label className="mb-2">Judul Berita</Label><Input value={formBeritaJudul} onChange={(e) => setFormBeritaJudul(e.target.value)} placeholder="Masukkan judul berita" className="input-focus" required /></div>
+              <div><Label className="mb-2">Kategori</Label>
+                <select value={formBeritaKategori} onChange={(e) => setFormBeritaKategori(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border text-foreground focus:outline-none input-focus">
+                  <option value="Pemilihan">Pemilihan</option>
+                  <option value="Pembangunan">Pembangunan</option>
+                  <option value="Kesehatan">Kesehatan</option>
+                  <option value="Prestasi">Prestasi</option>
+                  <option value="Infrastruktur">Infrastruktur</option>
+                </select>
+              </div>
+              <div><Label className="mb-2">URL Gambar</Label><Input value={formBeritaGambar} onChange={(e) => setFormBeritaGambar(e.target.value)} placeholder="https://..." className="input-focus" required />
+                <p className="text-xs text-muted-foreground mt-1">Gunakan gambar dari Unsplash/Pexels untuk gambar online</p>
+              </div>
+              {formBeritaGambar && <div className="relative h-32 rounded-lg overflow-hidden border border-border"><img src={formBeritaGambar} alt="Preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} /></div>}
+              <div><Label className="mb-2">Deskripsi Singkat</Label><Textarea rows={2} value={formBeritaDeskripsi} onChange={(e) => setFormBeritaDeskripsi(e.target.value)} placeholder="Ringkasan berita..." className="input-focus resize-none" required /></div>
+              <div><Label className="mb-2">Konten Lengkap</Label><Textarea rows={5} value={formBeritaKonten} onChange={(e) => setFormBeritaKonten(e.target.value)} placeholder="Isi berita lengkap..." className="input-focus resize-none" required /></div>
+              <Button type="submit" className="w-full bg-primary text-white hover:bg-primary-dark shadow-sm">
+                <IconNews className="w-4 h-4 mr-2" /> {editBeritaId ? "Simpan Perubahan" : "Tambah Berita"}
+              </Button>
+            </form>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
       {/* === Modal: Picker Avatar === */}
       <Dialog open={showAvatarPicker} onOpenChange={setShowAvatarPicker}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Pilih Avatar</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Ubah Foto Profil</DialogTitle></DialogHeader>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                setProfilePhoto(ev.target?.result as string);
+                setShowAvatarPicker(false);
+              };
+              reader.readAsDataURL(file);
+            }
+          }} />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full mb-4 border-dashed border-2 border-border hover:border-primary">
+            📷 Upload Foto dari Perangkat
+          </Button>
+          <p className="text-xs text-muted-foreground mb-3 text-center">Atau pilih avatar:</p>
           <div className="grid grid-cols-4 gap-3">
             {["👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫", "👩‍⚕️", "👨‍⚕️", "👩‍🍳", "👨‍🍳", "🧑‍🎓", "🧑‍💻", "🧑‍🔬", "🧑‍🎨"].map((a) => (
               <Button key={a} type="button" variant="outline" onClick={() => { setProfilePhoto(a); setShowAvatarPicker(false); }} className={`w-full aspect-square text-3xl border-2 ${profilePhoto === a ? "border-primary bg-primary/5" : "border-border"}`}>{a}</Button>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { z } from "zod";
+import { toast } from "sonner";
 import {
   IconMessage,
   IconClipboardList,
@@ -222,6 +223,7 @@ export default function DashboardPage() {
   const [profileDesa, setProfileDesa] = useState("Desa Batu Ampar");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // === Load data registrasi dari localStorage ===
   useEffect(() => {
@@ -234,6 +236,27 @@ export default function DashboardPage() {
         if (user.telepon) setProfilePhone(user.telepon);
         if (user.alamat) setProfileAddress(user.alamat);
         if (user.desa) setProfileDesa(user.desa);
+      }
+    } catch {}
+    // Load chat dari localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
+      if (stored.length > 0) {
+        setChatRoomsList((prev) => prev.map((room) => {
+          const roomMessages = stored.filter((m: ChatMessage & { roomId: number }) => m.roomId === room.id);
+          if (roomMessages.length > 0) {
+            const lastMsg = roomMessages[roomMessages.length - 1];
+            return { ...room, messages: roomMessages, lastMessage: lastMsg.text, lastTime: lastMsg.time };
+          }
+          return room;
+        }));
+      }
+    } catch {}
+    // Load status voting dari localStorage
+    try {
+      const voteData = JSON.parse(localStorage.getItem("voting_data") || "{}");
+      if (voteData.voted) {
+        setHasVoted(true);
       }
     } catch {}
   }, []);
@@ -258,14 +281,20 @@ export default function DashboardPage() {
     if (!formJudul.trim() || !formKategori || !formDeskripsi.trim()) return;
 
     const newAspirasi: Aspirasi = {
-      id: `ASP-${String(aspirasiList.length + 1).padStart(3, "0")}`,
+      id: `W-${Date.now()}`,
       judul: formJudul,
       kategori: formKategori,
       deskripsi: formDeskripsi,
       status: "Diterima",
       tanggal: new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }),
     };
-    setAspirasiList([newAspirasi, ...aspirasiList]);
+    const updatedList = [newAspirasi, ...aspirasiList];
+    setAspirasiList(updatedList);
+    // Simpan ke localStorage agar admin bisa melihat
+    try {
+      const existing = JSON.parse(localStorage.getItem("aspirasi_warga") || "[]");
+      localStorage.setItem("aspirasi_warga", JSON.stringify([{ ...newAspirasi, desa: profileDesa }, ...existing]));
+    } catch {}
     setNotifications([{
       id: Date.now(), type: "aspirasi", title: "Aspirasi Terkirim",
       message: `Aspirasi "${formJudul}" berhasil dikirim`,
@@ -276,6 +305,9 @@ export default function DashboardPage() {
     setFormKategori("");
     setFormDeskripsi("");
     setShowFormAspirasi(false);
+    toast.success("Aspirasi Terkirim!", {
+      description: `Aspirasi "${formJudul}" berhasil dikirim dan akan segera diproses.`,
+    });
   };
 
   // === Handler: kirim chat ===
@@ -285,6 +317,12 @@ export default function DashboardPage() {
 
     const userTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const newMsg: ChatMessage = { id: Date.now(), sender: "user", name: profileName, text: chatMessage, time: userTime };
+
+    // Simpan ke localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
+      localStorage.setItem("chat_messages", JSON.stringify([...stored, { ...newMsg, roomId: selectedChatRoom.id }]));
+    } catch {}
 
     const currentRoom = selectedChatRoom;
     const updatedRooms = chatRoomsList.map((room) => {
@@ -304,6 +342,11 @@ export default function DashboardPage() {
     setTimeout(() => {
       const petugasTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
       const replyMsg: ChatMessage = { id: Date.now() + 1, sender: "petugas", name: currentRoom.petugasName, text: randomReply, time: petugasTime };
+      // Simpan balasan ke localStorage
+      try {
+        const stored = JSON.parse(localStorage.getItem("chat_messages") || "[]");
+        localStorage.setItem("chat_messages", JSON.stringify([...stored, { ...replyMsg, roomId: currentRoom.id }]));
+      } catch {}
       setChatRoomsList((prev) => prev.map((room) => {
         if (room.id === currentRoom.id) {
           const updated = { ...room, messages: [...room.messages, replyMsg], lastMessage: randomReply, lastTime: "Sekarang" };
@@ -369,7 +412,7 @@ export default function DashboardPage() {
                 <IconMenu className="w-6 h-6" />
               </button>
               <div>
-                <h2 className="text-lg font-bold text-foreground">Selamat Datang, Warga!</h2>
+                <h2 className="text-lg font-bold text-foreground">Selamat Datang, {profileName}!</h2>
                 <p className="text-sm text-muted-foreground">Gunakan hak demokrasi Anda dengan aman</p>
               </div>
             </div>
@@ -426,9 +469,19 @@ export default function DashboardPage() {
               </div>
               {/* Profil singkat */}
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-accent-light flex items-center justify-center">
-                  <IconUser className="w-5 h-5 text-primary" />
-                </div>
+                {profilePhoto ? (
+                  profilePhoto.startsWith("data:") ? (
+                    <img src={profilePhoto} alt="Foto Profil" className="w-9 h-9 rounded-xl object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-accent-light flex items-center justify-center text-xl">
+                      {profilePhoto}
+                    </div>
+                  )
+                ) : (
+                  <div className="w-9 h-9 rounded-xl bg-accent-light flex items-center justify-center">
+                    <IconUser className="w-5 h-5 text-primary" />
+                  </div>
+                )}
                 <div className="hidden sm:block">
                   <p className="text-sm font-semibold text-foreground">{profileName}</p>
                   <p className="text-xs text-muted-foreground">Warga</p>
@@ -438,9 +491,9 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           {/* === Statistik ringkas === */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
             {[
               { value: aspirasiList.length, label: "Aspirasi Dikirim", icon: IconSend, color: "text-primary" },
               { value: aspirasiDiproses, label: "Sedang Diproses", icon: IconClock, color: "text-primary-light" },
@@ -448,14 +501,14 @@ export default function DashboardPage() {
               { value: hasVoted ? "1" : "0", label: "Suara Diberikan", icon: IconClipboardList, color: "text-primary" },
             ].map((stat) => (
               <Card key={stat.label} className="stat-card border-border">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-lg bg-accent-light flex items-center justify-center">
-                      <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                <CardContent className="p-3 sm:p-5">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-accent-light flex items-center justify-center">
+                      <stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.color}`} />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                      <p className="text-lg sm:text-2xl font-bold text-foreground">{stat.value}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">{stat.label}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -532,7 +585,14 @@ export default function DashboardPage() {
                       </div>
                       <h4 className="text-lg font-bold text-foreground mb-2">Suara Berhasil Dikirim!</h4>
                       <p className="text-sm text-muted-foreground mb-6">Pilihan Anda telah tercatat secara anonim dan aman.</p>
-                      <Button onClick={() => { setShowVotingSuccess(false); setHasVoted(true); setNotifications([{ id: Date.now(), type: "aspirasi", title: "Suara Terkirim", message: "Pilihan Anda berhasil tercatat secara anonim", time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); }} className="bg-primary text-white hover:bg-primary-dark">Kembali</Button>
+                      <Button onClick={() => {
+                        setShowVotingSuccess(false);
+                        setHasVoted(true);
+                        setNotifications([{ id: Date.now(), type: "aspirasi", title: "Suara Terkirim", message: "Pilihan Anda berhasil tercatat secara anonim", time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]);
+                        toast.success("Suara Terkirim!", {
+                          description: "Pilihan Anda berhasil tercatat secara anonim dan aman.",
+                        });
+                      }} className="bg-primary text-white hover:bg-primary-dark">Kembali</Button>
                     </div>
                   ) : (
                     <>
@@ -553,7 +613,13 @@ export default function DashboardPage() {
                       </div>
                       {selectedKandidat && (
                         <div className="mt-6 text-center">
-                          <Button onClick={() => setShowVotingSuccess(true)} className="bg-primary text-white hover:bg-primary-dark shadow-sm">
+                          <Button onClick={() => {
+                            // Simpan vote ke localStorage
+                            try {
+                              localStorage.setItem("voting_data", JSON.stringify({ voted: true, candidateId: selectedKandidat }));
+                            } catch {}
+                            setShowVotingSuccess(true);
+                          }} className="bg-primary text-white hover:bg-primary-dark shadow-sm">
                             <IconClipboardList className="w-4 h-4 mr-2" />
                             Konfirmasi Pilihan
                           </Button>
@@ -709,7 +775,13 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-4 mb-6 pb-6 border-b border-border">
                     <div className="relative group">
                       {profilePhoto ? (
-                        <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" />
+                        profilePhoto.startsWith("data:") ? (
+                          <img src={profilePhoto} alt="Foto Profil" className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400" />
+                        ) : (
+                          <div className="w-20 h-20 rounded-xl bg-accent-light flex items-center justify-center border-2 border-amber-400 text-4xl">
+                            {profilePhoto}
+                          </div>
+                        )
                       ) : (
                         <div className="w-20 h-20 rounded-xl bg-accent-light flex items-center justify-center border-2 border-amber-400">
                           <IconUser className="w-10 h-10 text-primary" />
@@ -786,7 +858,7 @@ export default function DashboardPage() {
                       <Button onClick={() => setShowSandiSuccess(false)} className="bg-primary text-white hover:bg-primary-dark">Kembali</Button>
                     </div>
                   ) : (
-                    <form onSubmit={(e) => { e.preventDefault(); const r = passwordSchema.safeParse({ oldPassword: "x", newPassword: "123456", confirmPassword: "123456" }); if (r.success || true) { setShowSandiSuccess(true); setNotifications([{ id: Date.now(), type: "aspirasi" as const, title: "Kata Sandi Diganti", message: "Kata sandi Anda berhasil diperbarui", time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); } }} className="space-y-4">
+                    <form onSubmit={(e) => { e.preventDefault(); const r = passwordSchema.safeParse({ oldPassword: "x", newPassword: "123456", confirmPassword: "123456" }); if (r.success || true) { setShowSandiSuccess(true); setNotifications([{ id: Date.now(), type: "aspirasi" as const, title: "Kata Sandi Diganti", message: "Kata sandi Anda berhasil diperbarui", time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), read: false }, ...notifications]); toast.success("Kata Sandi Berhasil Diganti!", { description: "Kata sandi Anda telah berhasil diperbarui." }); } }} className="space-y-4">
                       <div>
                         <Label className="mb-2">Kata Sandi Lama</Label>
                         <Input type="password" placeholder="Masukkan kata sandi lama" className="input-focus" required />
@@ -915,8 +987,23 @@ export default function DashboardPage() {
       <Dialog open={showAvatarPicker} onOpenChange={setShowAvatarPicker}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Pilih Avatar</DialogTitle>
+            <DialogTitle>Ubah Foto Profil</DialogTitle>
           </DialogHeader>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                setProfilePhoto(ev.target?.result as string);
+                setShowAvatarPicker(false);
+              };
+              reader.readAsDataURL(file);
+            }
+          }} />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full mb-4 border-dashed border-2 border-border hover:border-primary">
+            📷 Upload Foto dari Perangkat
+          </Button>
+          <p className="text-xs text-muted-foreground mb-3 text-center">Atau pilih avatar:</p>
           <div className="grid grid-cols-4 gap-3 mb-6">
             {["👩", "👨", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🏫", "👨‍🏫", "👩‍⚕️", "👨‍⚕️", "👩‍🍳", "👨‍🍳", "🧑‍🎓", "🧑‍💻", "🧑‍🔬", "🧑‍🎨"].map((avatar) => (
               <button key={avatar} onClick={() => { setProfilePhoto(avatar); setShowAvatarPicker(false); }}

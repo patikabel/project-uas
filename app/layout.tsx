@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 
 // Konfigurasi font global
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
@@ -44,6 +45,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <TooltipProvider>{children}</TooltipProvider>
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );

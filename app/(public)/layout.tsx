@@ -51,7 +51,13 @@ export default function PublicLayout({
                 href="/edukasi"
                 className="text-sm font-semibold text-primary bg-accent-light border border-amber-300 px-5 py-2.5 rounded-xl hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all"
               >
-                Edukasi Publik
+                Edukasi & Berita
+              </Link>
+              <Link
+                href="/hasil-voting"
+                className="text-sm font-semibold text-primary bg-accent-light border border-amber-300 px-5 py-2.5 rounded-xl hover:bg-primary hover:text-white hover:border-primary hover:shadow-lg hover:shadow-primary/30 transition-all"
+              >
+                Hasil Voting
               </Link>
             </nav>
 
@@ -112,7 +118,15 @@ export default function PublicLayout({
                     href="/edukasi"
                     className="hover:text-white transition-colors"
                   >
-                    Edukasi Publik
+                    Edukasi & Berita
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/hasil-voting"
+                    className="hover:text-white transition-colors"
+                  >
+                    Hasil Voting
                   </Link>
                 </li>
               </ul>

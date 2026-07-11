@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   IconBook,
   IconClipboardList,
@@ -16,6 +16,9 @@ import {
   IconUsers,
   IconScale,
   IconX,
+  IconNews,
+  IconCalendar,
+  IconEye,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -242,6 +245,69 @@ const faqs = [
   },
 ];
 
+// === Data berita desa ===
+const beritaList = [
+  {
+    id: 1,
+    judul: "Pemilihan Kepala Desa 2026 Resmi Dibuka",
+    kategori: "Pemilihan",
+    deskripsi: "Pemilihan kepala desa serentak untuk 12 desa di Balikpapan resmi dibuka hari ini. Warga diimbau untuk menggunakan hak pilihnya dengan bijak dan tanpa tekanan.",
+    tanggal: "1 Jul 2026",
+    penulis: "Admin Azelina",
+    gambar: "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&h=400&fit=crop",
+    konten: "Pemilihan kepala desa serentak untuk 12 desa di Balikpapan resmi dibuka hari ini. Komisi Pemilihan Desa (KPD) telah menyiapkan seluruh logistik dan Tempat Pemungutan Suara (TPS) di masing-masing desa.\n\nWarga diimbau untuk menggunakan hak pilihnya dengan bijak dan tanpa tekanan dari pihak manapun. Sistem e-voting melalui platform Azelina.id juga telah siap digunakan untuk memastikan transparansi dan keamanan proses pemungutan suara.\n\n\"Kami berharap partisipasi warga dapat meningkat tahun ini. Dengan adanya platform digital, warga yang berada di luar kota pun bisa tetap menggunakan hak pilihnya secara aman,\" ujar Ketua KPD.",
+  },
+  {
+    id: 2,
+    judul: "Program Pengadaan Air Bersih untuk Desa Sempaja",
+    kategori: "Pembangunan",
+    deskripsi: "Pemerintah desa mengalokasikan anggaran untuk pengadaan air bersih bagi warga Desa Sempaja yang masih mengalami kekurangan air bersih.",
+    tanggal: "28 Jun 2026",
+    penulis: "Admin Azelina",
+    gambar: "https://images.unsplash.com/photo-1504386106331-3e4e71712b38?w=800&h=400&fit=crop",
+    konten: "Pemerintah desa telah mengalokasikan anggaran sebesar Rp 500 juta untuk program pengadaan air bersih bagi warga Desa Sempaja. Program ini diinisiasi setelah banyaknya aspirasi warga yang mengeluhkan kekurangan air bersih.\n\nProgram ini akan meliputi pembangunan sumur bor baru, instalasi pipa distribusi, dan tangki penampungan air bersih di beberapa titik strategis di desa.\n\n\"Insya Allah dalam 3 bulan ke depan, warga sudah bisa menikmati air bersih yang layak. Kami berkomitmen untuk menyelesaikan proyek ini tepat waktu,\" kata Kepala Desa Sempaja.",
+  },
+  {
+    id: 3,
+    judul: "Fasilitas Posyandu Desa Klandasan Direnovasi",
+    kategori: "Kesehatan",
+    deskripsi: "Posyandu di Desa Klandasan mendapatkan renovasi fasilitas untuk meningkatkan pelayanan kesehatan ibu dan anak.",
+    tanggal: "25 Jun 2026",
+    penulis: "Admin Azelina",
+    gambar: "https://images.unsplash.com/photo-1559757175-5700dde675bc?w=800&h=400&fit=crop",
+    konten: "Posyandu di Desa Klandasan sedang dalam proses renovasi untuk meningkatkan kualitas pelayanan kesehatan ibu dan anak. Renovasi ini meliputi perluasan ruangan, pengadaan alat kesehatan baru, dan pembaruan fasilitas sanitasi.\n\nProgram renovasi ini diinisiasi berdasarkan aspirasi warga yang disampaikan melalui platform Azelina.id. Total anggaran yang dialokasikan adalah Rp 300 juta.\n\n\"Terima kasih kepada warga yang telah menyampaikan aspirasi. Kami berharap setelah renovasi, pelayanan kesehatan di desa bisa lebih baik,\" ujar Ketua Posyandu.",
+  },
+  {
+    id: 4,
+    judul: "Warga Desa Batu Ampar Raih Juara Lomba Desa Tingkat Provinsi",
+    kategori: "Prestasi",
+    deskripsi: "Desa Batu Ampar berhasil meraih juara 2 dalam lomba desa tingkat provinsi kategori desa digital terbaik.",
+    tanggal: "20 Jun 2026",
+    penulis: "Admin Azelina",
+    gambar: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=400&fit=crop",
+    konten: "Desa Batu Ampar berhasil meraih juara 2 dalam lomba desa tingkat provinsi kategori desa digital terbaik. Penghargaan ini diberikan atas inovasi desa dalam pemanfaatan teknologi digital untuk pelayanan publik.\n\nSalah satu faktor penilaian adalah penggunaan platform Azelina.id yang telah membantu meningkatkan partisipasi warga dalam proses demokrasi desa.\n\n\"Pencapaian ini tidak terlepas dari peran aktif seluruh warga desa. Kami berharap prestasi ini bisa menjadi motivasi untuk terus berinovasi,\" kata Kepala Desa Batu Ampar.",
+  },
+  {
+    id: 5,
+    judul: "Pembangunan Trotoar Pejalan Kaki Desa Damai Selesai",
+    kategori: "Infrastruktur",
+    deskripsi: "Proyek pembangunan trotoar pejalan kaki di Jl. Damai telah selesai dan siap digunakan oleh warga.",
+    tanggal: "15 Jun 2026",
+    penulis: "Admin Azelina",
+    gambar: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&h=400&fit=crop",
+    konten: "Proyek pembangunan trotoar pejalan kaki di Jl. Damai telah resmi selesai dan siap digunakan oleh warga. Trotoar sepanjang 500 meter ini dibangun untuk meningkatkan keamanan pejalan kaki.\n\nPembangunan trotoar ini merupakan tindak lanjut dari aspirasi warga yang disampaikan melalui platform Azelina.id. Proyek ini menelan biaya Rp 750 juta dan dikerjakan selama 3 bulan.\n\n\"Alhamdulillah, trotoar sudah selesai. Warga bisa berjalan dengan aman tanpa takut terkena kendaraan. Terima kasih atas aspirasi warga yang telah kami tindaklanjuti,\" ujar Kepala Desa Damai.",
+  },
+];
+
+// Kategori warna badge berita
+const BERITA_KATEGORI_COLORS: Record<string, string> = {
+  Pemilihan: "bg-primary/10 text-primary",
+  Pembangunan: "bg-success/10 text-success",
+  Kesehatan: "bg-blue-500/10 text-blue-500",
+  Prestasi: "bg-amber-500/10 text-amber-600",
+  Infrastruktur: "bg-orange-500/10 text-orange-500",
+};
+
 // Halaman edukasi publik
 export default function EdukasiPage() {
   const [selectedArticle, setSelectedArticle] = useState<
@@ -250,6 +316,21 @@ export default function EdukasiPage() {
   const [selectedRight, setSelectedRight] = useState<
     (typeof voterRights)[0] | null
   >(null);
+  const [beritaData, setBeritaData] = useState(beritaList);
+  const [selectedBerita, setSelectedBerita] = useState<(typeof beritaList)[0] | null>(null);
+
+  // Load berita dari localStorage (yang diinput admin)
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("berita_list") || "[]");
+      if (stored.length > 0) {
+        // Gabungkan: berita admin di atas, berita default di bawah
+        const adminIds = new Set(stored.map((b: { id: number }) => b.id));
+        const defaultBerita = beritaList.filter((b) => !adminIds.has(b.id));
+        setBeritaData([...stored, ...defaultBerita]);
+      }
+    } catch {}
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -289,6 +370,7 @@ export default function EdukasiPage() {
           <nav className="flex overflow-x-auto gap-2 py-3" aria-label="Edukasi">
             {[
               { href: "#artikel", icon: IconBook, label: "Artikel" },
+              { href: "#berita", icon: IconNews, label: "Berita Desa" },
               { href: "#hak-pilih", icon: IconShield, label: "Hak Pilih Warga" },
               { href: "#cara-kerja", icon: IconClipboardList, label: "Cara Kerja" },
               { href: "#faq", icon: IconHelp, label: "FAQ" },
@@ -469,6 +551,61 @@ export default function EdukasiPage() {
         </div>
       </section>
 
+      {/* === Section Berita Desa === */}
+      <section id="berita" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-10">
+            <h3 className="text-3xl font-bold text-foreground mb-3">
+              Berita Desa
+            </h3>
+            <p className="text-muted-foreground">
+              Ikuti perkembangan terbaru dari 12 desa di Balikpapan
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {beritaData.map((berita) => (
+              <Card
+                key={berita.id}
+                onClick={() => setSelectedBerita(berita)}
+                className="bg-white border-border hover:shadow-lg hover:border-accent transition-all cursor-pointer group overflow-hidden"
+              >
+                <div className="relative h-48 overflow-hidden">
+                  <Image
+                    src={berita.gambar}
+                    alt={berita.judul}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute top-3 left-3">
+                    <Badge className={`${BERITA_KATEGORI_COLORS[berita.kategori] || "bg-primary/10 text-primary"} border-0 hover:bg-transparent`}>
+                      {berita.kategori}
+                    </Badge>
+                  </div>
+                </div>
+                <CardContent className="p-5">
+                  <h4 className="font-bold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+                    {berita.judul}
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                    {berita.deskripsi}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <IconCalendar className="w-3 h-3" />
+                      {berita.tanggal}
+                    </span>
+                    <span className="flex items-center gap-1 text-primary font-medium">
+                      <IconEye className="w-3 h-3" />
+                      Baca Selengkapnya
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* === CTA Section === */}
       <section className="py-20 hero-gradient relative overflow-hidden">
         <div className="absolute inset-0 bg-black/5" />
@@ -553,6 +690,41 @@ export default function EdukasiPage() {
             <p className="text-muted-foreground leading-relaxed text-justify">
               {selectedRight?.content}
             </p>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Modal: Detail Berita === */}
+      <Dialog open={!!selectedBerita} onOpenChange={(open) => !open && setSelectedBerita(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="text-xl">{selectedBerita?.judul}</DialogTitle>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+              <Badge className={`${BERITA_KATEGORI_COLORS[selectedBerita?.kategori || ""] || "bg-primary/10 text-primary"} border-0 hover:bg-transparent`}>
+                {selectedBerita?.kategori}
+              </Badge>
+              <span className="flex items-center gap-1">
+                <IconCalendar className="w-3 h-3" />
+                {selectedBerita?.tanggal}
+              </span>
+              <span className="flex items-center gap-1">
+                <IconClock className="w-3 h-3" />
+                {selectedBerita?.penulis}
+              </span>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[calc(85vh-140px)]">
+            <div className="relative h-64 rounded-xl overflow-hidden mb-6">
+              <Image
+                src={selectedBerita?.gambar || "/gambar1.jpeg"}
+                alt={selectedBerita?.judul || ""}
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div className="prose prose-sm max-w-none text-foreground leading-relaxed whitespace-pre-line">
+              {selectedBerita?.konten}
+            </div>
           </ScrollArea>
         </DialogContent>
       </Dialog>

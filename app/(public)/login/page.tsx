@@ -81,8 +81,12 @@ export default function LoginPage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* === Hero Section: header gradient === */}
-      <section className="hero-gradient relative overflow-hidden min-h-[400px] lg:min-h-[480px]">
-        <div className="absolute inset-0 bg-black/5" />
+      <section className="relative overflow-hidden min-h-[400px] lg:min-h-[480px]">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/gambar1.jpeg')" }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/80 to-primary/60" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 bg-black/10 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-6">
